@@ -3,6 +3,7 @@ import json
 from player import Player
 from board import Board
 from tile import PropertyTile
+from actions import EVERYONE
 from negotiation import run_negotiation, ask_buy_decision
 
 # PLACEHOLDER for the research reward: how much extra "strategic value" a complete color
@@ -28,6 +29,9 @@ class GameManager:
         # None or 0 means no limit. Each agent reply counts, whether it is an LLM or a rule bot.
         self.maxCallsPerTurn = maxCallsPerTurn
         self.callsThisTurn = 0
+
+        # Properties promised in open offers: {property id: (owner, recipient)}.
+        self.locks = {}
 
         self.turnCount = 0
         self.events = []  # short plain-English history, shown to agents
@@ -275,6 +279,70 @@ class GameManager:
         return [p for p in self.activePlayers()
                 if p.playerName != player.playerName and p.playerName in self.agents]
 
+    def findPlayer(self, text):
+        """Match a name an agent wrote ("Agent C", "agent c" or just "C") to a player, or None."""
+        wanted = (text or "").strip().lower()
+        matches = [p for p in self.players if p.playerName.lower() == wanted]
+        if not matches:  # allow a short form such as "C" for "Agent C"
+            matches = [p for p in self.players if p.playerName.lower().split()[-1] == wanted]
+        return matches[0] if len(matches) == 1 else None
+
+    def validateIdea(self, proposer, deal):
+        """Check an idea floated to everyone. Returns None if it is fine, otherwise the reason.
+
+        deal is from the proposer's point of view: give_* = what they would hand over,
+        get_props = properties they want (each owned by some other player who can trade).
+        """
+        for propId in deal.give_props:
+            tile = self.board.getTile(propId)
+            if propId not in proposer.ownedProperties:
+                return f"You do not own {tile.name}, so you cannot offer it in give=[...]."
+            if tile.houseCount > 0:
+                return f"{tile.name} has houses and cannot be traded."
+        if deal.give_cash > proposer.cashBalance:
+            return f"You only have ${proposer.cashBalance}, not ${deal.give_cash}."
+        if not deal.get_props and not deal.get_cash:
+            return "An idea must say what you want: list properties in want=[...] or ask for cash with get_cash=M."
+        partners = [p.playerName for p in self.tradePartners(proposer)]
+        for propId in deal.get_props:
+            tile = self.board.getTile(propId)
+            if tile.ownerId is None:
+                return (f"{tile.name} is unowned (the bank has it), so nobody can trade it. "
+                        f"The only way to get it is to land on it and buy it.")
+            if tile.ownerId == proposer.playerName:
+                return f"You already own {tile.name}. To offer it, list it in give=[...] instead."
+            if tile.ownerId not in partners:
+                return f"{tile.name} belongs to {tile.ownerId}, who cannot trade."
+        return None
+
+    # ------------------------------------------------------------------ locks
+    # A property a player has put in an open offer is "promised" to that offer's recipient.
+    # It may not be promised to anyone else until that offer closes. An idea floated to
+    # everyone promises to EVERYONE, which is compatible with any single recipient.
+    def lockConflict(self, owner, recipient, propIds):
+        """None if `owner` may promise these properties to `recipient`, otherwise the reason."""
+        for propId in propIds:
+            held = self.locks.get(propId)
+            if held is None or held == (owner, recipient) or held == (owner, EVERYONE):
+                continue
+            who = "everyone (in an open idea)" if held[1] == EVERYONE else held[1]
+            return (f"{self.board.getTile(propId).name} is already promised to {who} in an open "
+                    f"offer, so it cannot be offered to anyone else until that offer closes.")
+        return None
+
+    def lockOffer(self, owner, recipient, propIds):
+        """Record `owner`'s open offer to `recipient` (replacing their earlier one to them)."""
+        self.releaseLocks(owner, recipient)
+        for propId in propIds:
+            self.locks[propId] = (owner, recipient)
+
+    def releaseLocks(self, owner=None, recipient=None):
+        """Release locks matching owner and/or recipient; with no arguments, release all."""
+        self.locks = {
+            propId: held for propId, held in self.locks.items()
+            if not ((owner is None or held[0] == owner) and (recipient is None or held[1] == recipient))
+        }
+
     def resolveTradeTarget(self, speaker, targetText, partner=None):
         """Work out who a [SUBMIT_DEAL] is for. Returns (player, None) or (None, reason).
 
@@ -292,13 +360,9 @@ class GameManager:
             return None, (f"Say who this offer is for: add to=[Player] to the [SUBMIT_DEAL] line. "
                           f"You can trade with: {options}.")
 
-        wanted = targetText.strip().lower()
-        matches = [p for p in self.players if p.playerName.lower() == wanted]
-        if not matches:  # allow a short form such as "C" for "Agent C"
-            matches = [p for p in self.players if p.playerName.lower().split()[-1] == wanted]
-        if len(matches) != 1:
+        target = self.findPlayer(targetText)
+        if target is None:
             return None, f"There is no player called '{targetText}'. You can trade with: {options}."
-        target = matches[0]
 
         if target.playerName == speaker.playerName:
             return None, f"You cannot make an offer to yourself. You can trade with: {options}."

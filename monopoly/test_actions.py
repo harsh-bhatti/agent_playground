@@ -27,11 +27,23 @@ def reply(action, talk="ok", thought="thinking"):
 class ScriptedAgent(Agent):
     """Returns canned replies in order, so we can test the game logic without a model."""
 
-    def __init__(self, name, buy=(), open=(), respond=(), correct=()):
+    def __init__(self, name, buy=(), open=(), respond=(), correct=(), idea=(), choose=()):
         super().__init__(name)
-        self.q = {"buy": list(buy), "open": list(open), "respond": list(respond), "correct": list(correct)}
+        self.q = {"buy": list(buy), "open": list(open), "respond": list(respond), "correct": list(correct),
+                  "idea": list(idea), "choose": list(choose)}
         self.errors = []  # problems the game reported back to us
         self.incoming = []  # messages the game forwarded to us
+        self.locks_seen = None  # game.locks at the moment this agent was asked to choose
+
+    def respond_to_idea(self, game, player, proposer, idea_text, idea):
+        self.incoming.append(idea_text)
+        return self.q["idea"].pop(0) if self.q["idea"] else super().respond_to_idea(
+            game, player, proposer, idea_text, idea)
+
+    def choose_offer(self, game, player, offers_text, offers):
+        self.incoming.append(offers_text)
+        self.locks_seen = dict(game.locks)
+        return self.q["choose"].pop(0)
 
     def decide_buy(self, game, player, tile):
         return self.q["buy"].pop(0)
@@ -992,6 +1004,235 @@ def test_four_player_mock_games_respect_the_call_cap():
                 game.executeTurn()
                 assert game.callsThisTurn <= cap
                 check_invariants(game)
+
+
+# ------------------------------------------------ floating an idea (phase 4)
+from actions import CHOOSE_ACTIONS, EVERYONE, IDEA_REPLY_ACTIONS  # noqa: E402
+
+IDEA = "[FLOAT_IDEA] want=[Mediterranean Avenue, Reading Railroad] give=[] give_cash=300 get_cash=0"
+C_SELLS = "[SUBMIT_DEAL] to=[Agent A] give=[Mediterranean Avenue] give_cash=0 get=[] get_cash=100"
+B_SELLS = "[SUBMIT_DEAL] to=[Agent A] give=[Reading Railroad] give_cash=0 get=[] get_cash=250"
+MED, READING, BALTIC = tile_id("Mediterranean Avenue"), tile_id("Reading Railroad"), tile_id("Baltic Avenue")
+
+
+def test_parse_float_idea_and_new_tags():
+    def act(text, allowed):
+        return parse_action(parse_reply(reply(text)), allowed, BOARD)
+
+    idea = act("[FLOAT_IDEA] want=[Mediterranean Avenue] give=[Baltic Avenue] give_cash=10 get_cash=0",
+               OPEN_ACTIONS)
+    assert idea.kind == "FLOAT_IDEA"
+    assert (idea.deal.get_props, idea.deal.give_props, idea.deal.give_cash) == ((MED,), (BALTIC,), 10)
+    assert act("[FLOAT_IDEA] get=[Mediterranean Avenue] give_cash=5", OPEN_ACTIONS).deal.get_props == (MED,)
+    assert "idea is empty" in act("[FLOAT_IDEA] want=[] give=[] give_cash=0 get_cash=0", OPEN_ACTIONS).error
+    assert "Could not read the idea" in act("[FLOAT_IDEA] please", OPEN_ACTIONS).error
+    assert "not allowed" in act("[FLOAT_IDEA] want=[Baltic] give_cash=5", RESPOND_ACTIONS).error
+    assert "not allowed" in act("[IGNORE]", OPEN_ACTIONS).error
+    assert act("[IGNORE]", IDEA_REPLY_ACTIONS).kind == "IGNORE"
+    assert act("[ACCEPT_DEAL] from=[Agent C]", CHOOSE_ACTIONS).source == "Agent C"
+
+
+def test_validate_idea_rules():
+    game = make_four()
+    a = game.getPlayer(A)
+
+    def check(give=(), give_cash=0, want=(), get_cash=0):
+        return game.validateIdea(a, Deal(tuple(give), give_cash, tuple(want), get_cash))
+
+    assert check(want=[MED], give_cash=90) is None
+    assert check(want=[MED, READING], give=[BALTIC]) is None  # wanted from two different owners
+    assert "unowned" in check(want=[tile_id("Vermont Avenue")])
+    assert "already own" in check(want=[BALTIC])
+    assert "do not own" in check(give=[READING], want=[MED])
+    assert "only have" in check(give_cash=99999, want=[MED])
+    assert "must say what you want" in check(give=[BALTIC])
+
+
+def test_lock_rules():
+    game = make_four()
+    game.lockOffer(A, C, [BALTIC])
+    assert game.lockConflict(A, C, [BALTIC]) is None  # same offer, same recipient
+    assert "promised to Agent C" in game.lockConflict(A, D, [BALTIC])  # promising it twice
+    assert "promised to Agent C" in game.lockConflict(A, EVERYONE, [BALTIC])
+    game.lockOffer(B, EVERYONE, [READING])  # an idea promises to everyone...
+    assert game.lockConflict(B, D, [READING]) is None  # ...so any one recipient is fine
+    game.releaseLocks(owner=A)
+    assert game.locks == {READING: (B, EVERYONE)}
+    game.releaseLocks()
+    assert game.locks == {}
+
+
+def test_broadcast_sealed_offers_accept_one():
+    a = ScriptedAgent(A, open=[reply(IDEA, "Who will sell?")], choose=[reply("[ACCEPT_DEAL] from=[Agent C]")])
+    b = ScriptedAgent(B, idea=[reply(B_SELLS, "B-PRIVATE-PITCH")])
+    c = ScriptedAgent(C, idea=[reply(C_SELLS, "C-PRIVATE-PITCH")])
+    d = ScriptedAgent(D, idea=[reply("[IGNORE]")])
+    game = make_four(a=a, b=b, c=c, d=d)
+    result = open_four(game)
+
+    assert result.kind == "broadcast" and result.outcome == "deal"
+    assert result.responder == C and result.proposer == C and set(result.offers) == {B, C}
+    # Only the chosen trade happened.
+    assert game.getPlayer(A).cashBalance == 1400 and game.getPlayer(C).cashBalance == 1600
+    assert MED in game.getPlayer(A).ownedProperties
+    assert READING in game.getPlayer(B).ownedProperties and game.getPlayer(B).cashBalance == 1500
+    # Sealed: every responder saw the same idea text, and nobody saw another reply.
+    assert b.incoming[0] == c.incoming[0] == d.incoming[0]
+    assert "Mediterranean Avenue (owned by Agent C)" in d.incoming[0]
+    assert "PITCH" not in d.incoming[0] and "PITCH" not in c.incoming[0]
+    # The proposer saw both offers from its own point of view, and they were locked.
+    assert "C-PRIVATE-PITCH" in a.incoming[0] and "B-PRIVATE-PITCH" in a.incoming[0]
+    assert "Agent D did not make an offer" in a.incoming[0]
+    assert a.locks_seen == {MED: (C, A), READING: (B, A)}
+    assert game.locks == {}  # all released at the end
+    check_invariants(game)
+
+
+def test_idea_give_properties_are_locked_to_everyone():
+    idea = "[FLOAT_IDEA] want=[Mediterranean Avenue] give=[Baltic Avenue] give_cash=0 get_cash=0"
+    swap = "[SUBMIT_DEAL] to=[Agent A] give=[Mediterranean Avenue] give_cash=0 get=[Baltic Avenue] get_cash=0"
+    a = ScriptedAgent(A, open=[reply(idea)], choose=[reply("[WALK_AWAY]")])
+    c = ScriptedAgent(C, idea=[reply(swap)])
+    game = make_four(a=a, c=c)
+    result = open_four(game)
+    assert a.locks_seen == {BALTIC: (A, EVERYONE), MED: (C, A)}
+    assert result.outcome == "walk_away" and game.locks == {}
+    assert BALTIC in game.getPlayer(A).ownedProperties  # walking away changes nothing
+    check_invariants(game)
+
+
+def test_broadcast_counter_continues_as_two_players():
+    counter = "[SUBMIT_DEAL] to=[Agent C] give=[] give_cash=120 get=[Mediterranean Avenue] get_cash=0"
+    expensive = "[SUBMIT_DEAL] to=[Agent A] give=[Mediterranean Avenue] give_cash=0 get=[] get_cash=150"
+    a = ScriptedAgent(A, open=[reply(IDEA)], choose=[reply(counter, "How about $120?")])
+    c = ScriptedAgent(C, idea=[reply(expensive)], respond=[reply("[ACCEPT_DEAL]", "Fine.")])
+    game = make_four(a=a, c=c)
+    result = open_four(game)
+    assert result.outcome == "deal" and result.responder == C and result.proposer == A
+    assert game.getPlayer(A).cashBalance == 1380 and game.getPlayer(C).cashBalance == 1620
+    assert "How about $120?" in c.incoming[1] and "YOU would get: $120" in c.incoming[1]
+    assert game.locks == {}
+    check_invariants(game)
+
+
+def test_broadcast_with_no_offers():
+    a = ScriptedAgent(A, open=[reply(IDEA)])
+    game = make_four(a=a)  # B, C and D use the default: ignore ideas
+    result = open_four(game)
+    assert result.outcome == "no_offers" and result.offers == {} and game.locks == {}
+    assert [t["kind"] for t in result.turns] == ["FLOAT_IDEA", "IGNORE", "IGNORE", "IGNORE"]
+
+
+def test_invalid_responder_offer_retries_then_ignores():
+    bad = "[SUBMIT_DEAL] to=[Agent A] give=[Baltic Avenue] give_cash=0 get=[] get_cash=50"  # A's property
+    a = ScriptedAgent(A, open=[reply(IDEA)])
+    c = ScriptedAgent(C, idea=[reply(bad)], correct=[reply(bad)])
+    game = make_four(a=a, c=c)
+    result = open_four(game)
+    c_turn = result.turns[2]
+    assert c_turn["speaker"] == C and c_turn["kind"] == "IGNORE" and c_turn["fell_back"]
+    assert "belongs to Agent A" in c.errors[0]
+    assert result.outcome == "no_offers" and game.locks == {}
+
+
+def test_responder_must_address_the_proposer():
+    a = ScriptedAgent(A, open=[reply(IDEA)], choose=[reply("[WALK_AWAY]")])
+    c = ScriptedAgent(C, idea=[reply(C_SELLS.replace("to=[Agent A]", "to=[Agent B]"))],
+                      correct=[reply(C_SELLS)])
+    game = make_four(a=a, c=c)
+    result = open_four(game)
+    assert "negotiating with Agent A" in c.errors[0]
+    assert C in result.offers and result.outcome == "walk_away"
+
+
+def test_choosing_must_name_a_real_offer():
+    a = ScriptedAgent(A, open=[reply(IDEA)], choose=[reply("[ACCEPT_DEAL]")],
+                      correct=[reply("[ACCEPT_DEAL] from=[Agent D]")])  # D made no offer
+    b = ScriptedAgent(B, idea=[reply(B_SELLS)])
+    c = ScriptedAgent(C, idea=[reply(C_SELLS)])
+    game = make_four(a=a, b=b, c=c)
+    result = open_four(game)
+    assert "Say which offer you mean" in a.errors[0]
+    choose = result.turns[-1]
+    assert choose["fell_back"] and "no offer from 'Agent D'" in choose["error"]
+    assert result.outcome == "walk_away" and game.getPlayer(A).cashBalance == 1500  # safe default
+
+
+def test_single_offer_can_be_accepted_without_from():
+    a = ScriptedAgent(A, open=[reply(IDEA)], choose=[reply("[ACCEPT_DEAL]")])
+    c = ScriptedAgent(C, idea=[reply(C_SELLS)])
+    game = make_four(a=a, c=c)
+    assert open_four(game).outcome == "deal" and MED in game.getPlayer(A).ownedProperties
+
+
+def test_broadcast_respects_the_call_cap():
+    # open (1) + three replies (3) = 4 calls: the proposer's choice is capped.
+    a = ScriptedAgent(A, open=[reply(IDEA)], choose=[reply("[ACCEPT_DEAL] from=[Agent C]")])
+    c = ScriptedAgent(C, idea=[reply(C_SELLS)])
+    game = make_four(a=a, c=c)
+    game.maxCallsPerTurn = 4
+    result = open_four(game)
+    assert result.outcome == "call_cap" and result.turns[-1]["capped"]
+    assert a.q["choose"]  # never asked
+    assert game.getPlayer(A).cashBalance == 1500 and game.locks == {}
+    # With only 2 calls, C and D are never asked: no offers because of the cap.
+    a2 = ScriptedAgent(A, open=[reply(IDEA)])
+    game2 = make_four(a=a2)
+    game2.maxCallsPerTurn = 2
+    assert open_four(game2).outcome == "call_cap"
+
+
+def test_rule_based_agent_floats_an_idea_and_deals():
+    agents = {n: RuleBasedAgent(n) for n in FOUR}
+    agents[A] = RuleBasedAgent(A, float_ideas=True)
+    game = GameManager(FOUR, agents=agents)
+    give_property(game, A, "Baltic Avenue")
+    give_property(game, B, "Reading Railroad")
+    give_property(game, C, "Mediterranean Avenue")
+    with quiet():
+        game.negotiationPhase(game.getPlayer(A))
+    result = game.negotiationResults[0]
+    assert result.kind == "broadcast" and result.outcome == "deal" and result.responder == C
+    assert list(result.offers) == [C]  # only C owns what A wants
+    assert game.ownsFullSet(A, "Brown") and game.locks == {}
+    check_invariants(game)
+
+
+def test_llm_agent_idea_prompts():
+    sent = []
+    real = llm_client.chat
+    llm_client.chat = lambda messages, **kw: sent.append([dict(m) for m in messages]) or reply("[IGNORE]")
+    try:
+        agent = LLMAgent(C)
+        game = make_four(c=agent)
+        a, c = game.getPlayer(A), game.getPlayer(C)
+        agent.respond_to_idea(game, c, a, "Agent A floats an idea to every player: ...", Deal((), 90, (MED,), 0))
+        agent.end_conversation()
+        agent.choose_offer(game, c, "Replies to your idea:\n- Agent B says ...", {B: Deal()})
+    finally:
+        llm_client.chat = real
+    idea_msg, choose_msg = sent[0][1]["content"], sent[1][1]["content"]
+    assert "[SUBMIT_DEAL] to=[Agent A]" in idea_msg and "[IGNORE]" in idea_msg
+    assert "Replies to your idea" in choose_msg and "[ACCEPT_DEAL] from=[Player]" in choose_msg
+    assert "[FLOAT_IDEA]" in sent[0][0]["content"]  # documented in the system prompt
+
+
+def test_four_player_mock_games_with_ideas_and_offers():
+    kinds = {"targeted": 0, "broadcast": 0}
+    for seed in range(10):
+        random.seed(seed)
+        agents = {n: RuleBasedAgent(n, float_ideas=i % 2 == 1) for i, n in enumerate(FOUR)}
+        game = GameManager(FOUR, agents=agents, maxCallsPerTurn=12)
+        with quiet():
+            for _ in range(150):
+                game.executeTurn()
+                check_invariants(game)
+                assert game.locks == {}  # nothing stays promised between turns
+        for r in game.negotiationResults:
+            if r.trade:
+                kinds[r.kind] += 1
+                assert {r.trade["initiator"], r.trade["target"]} == {r.initiator, r.responder}
+    assert kinds["targeted"] > 0 and kinds["broadcast"] > 0, kinds
 
 
 # ------------------------------------------------------------------ runner

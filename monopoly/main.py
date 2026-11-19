@@ -31,16 +31,19 @@ def player_names(count):
 def build_agents(args, names):
     """One agent per player name.
 
-    mock:        every player is a rule-based bot that proposes trades.
+    mock:        every player is a rule-based bot that proposes trades. With more than 2
+                 players, Agent A, C, ... make targeted offers and Agent B, D, ... float ideas
+                 to everyone, so both paths run. With 2 players all make targeted offers.
     llm-vs-rule: Agent A is an LLM; everyone else is a rule-based bot that only responds.
     llm:         every player is an LLM. --persona-a / --persona-b set Agent A / Agent B;
                  other players get no persona.
     """
     personas = {"Agent A": args.persona_a, "Agent B": args.persona_b}
     agents = {}
-    for name in names:
+    for index, name in enumerate(names):
         if args.mode == "mock":
-            agents[name] = RuleBasedAgent(name, propose=True)
+            floats = len(names) > 2 and index % 2 == 1
+            agents[name] = RuleBasedAgent(name, propose=True, float_ideas=floats)
         elif args.mode == "llm-vs-rule" and name != "Agent A":
             agents[name] = RuleBasedAgent(name, propose=False)
         else:
@@ -81,7 +84,8 @@ def print_summary(game, stopped_early):
     outcomes = {}
     for result in game.negotiationResults:
         outcomes[result.outcome] = outcomes.get(result.outcome, 0) + 1
-    print(f"Negotiation phases: {len(game.negotiationResults)}  {outcomes}")
+    ideas = sum(1 for r in game.negotiationResults if r.kind == "broadcast")
+    print(f"Negotiation phases: {len(game.negotiationResults)}  {outcomes}  (ideas floated: {ideas})")
 
     all_turns = [t for r in game.negotiationResults for t in r.turns] + game.decisionLog
     turns = [t for t in all_turns if t["attempts"] > 0]  # the agent was actually asked

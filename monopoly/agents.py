@@ -122,6 +122,23 @@ class Agent:
         """`offer` is the standing deal written from this player's point of view, or None."""
         raise NotImplementedError
 
+    def respond_to_idea(self, game, player, proposer, idea_text, idea):
+        """Another player floated an idea to everyone. Reply with an offer to them or ignore it.
+
+        `idea` is a Deal from the PROPOSER's point of view: get_props = what they want (may be
+        owned by different players), give_* = what they would hand over.
+        Return [SUBMIT_DEAL] to=[proposer] ... or [IGNORE]. The default ignores every idea.
+        """
+        return _reply("I do not answer ideas.", "", "[IGNORE]")
+
+    def choose_offer(self, game, player, offers_text, offers):
+        """Replies came in for this player's idea. `offers` = {name: Deal from THIS player's view}.
+
+        Return [ACCEPT_DEAL] from=[name], a counter [SUBMIT_DEAL] to=[name] ..., or
+        [WALK_AWAY]. The default walks away.
+        """
+        return _reply("I do not choose among offers.", "", "[WALK_AWAY]")
+
     def correct(self, error):
         """Called when the last reply was invalid. Returns a new reply."""
         return _reply("My last reply was invalid.", "", "[PASS]")
@@ -150,7 +167,7 @@ Rules of this version:
 - The ONLY ways to get a property are buying it right after you land on it, or trading with another player. You cannot buy an unowned property just by choosing to.
 - Owning EVERY property of a color group doubles the rent on those properties. Railroad rent grows with how many railroads the owner holds.
 - Players may trade properties and cash. A trade is always between two players: it only happens if both agree, and each side must really own what it gives.
-- On your turn you may open ONE negotiation, with the one player you choose.
+- On your turn you may open ONE negotiation: either make an offer to the one player you choose, or float an idea to every player at once and pick the best reply.
 - A player who cannot pay rent or tax is bankrupt and out of the game.
 {persona}
 Reply format (always in this order):
@@ -162,9 +179,11 @@ Action: exactly one action tag from the list in the message you are answering
 Action tags:
 [BUY] or [PASS] - buy the property you landed on, or decline. [PASS] also means "no trade this turn".
 [SUBMIT_DEAL] to=[Player] give=[Property, Property] give_cash=N get=[Property] get_cash=M - propose or counter-propose a trade. to is the player the offer is for: it is required when you open a negotiation, and must be the player who owns the properties in get. In a negotiation that is already going on, to can be left out. give and get are ALWAYS from YOUR point of view: give is what YOU hand over (properties YOU own, plus cash from you); get is what YOU receive (properties the player in to owns, plus cash from them). Use exact property names, [] for none, and whole dollars.
-[ACCEPT_DEAL] - accept the other player's latest [SUBMIT_DEAL] exactly as written. Only valid when there is an offer to accept.
+[FLOAT_IDEA] want=[Property] give=[Property] give_cash=N get_cash=M - only when opening: tell EVERY player what you want and what you would give. want lists properties other players own (they may belong to different players); give lists properties YOU own. Each player may answer with an offer; nobody sees the others' offers. You then accept one, counter one, or walk away.
+[ACCEPT_DEAL] - accept the other player's latest [SUBMIT_DEAL] exactly as written. Only valid when there is an offer to accept. When choosing among replies to your idea, write [ACCEPT_DEAL] from=[Player].
 [REJECT_DEAL] - turn the latest offer down without new terms.
 [WALK_AWAY] - end the negotiation.
+[IGNORE] - only when answering another player's idea: make no offer.
 
 Examples of the Action line (the players and properties here are only illustrations):
 
@@ -176,6 +195,9 @@ Action: [SUBMIT_DEAL] to=[{ex}] give=[Baltic Avenue] give_cash=0 get=[] get_cash
 
 To SWAP properties with {ex}:
 Action: [SUBMIT_DEAL] to=[{ex}] give=[Baltic Avenue] give_cash=0 get=[Mediterranean Avenue] get_cash=20
+
+To ask EVERY player who will sell you a property, and for how much:
+Action: [FLOAT_IDEA] want=[Mediterranean Avenue] give=[] give_cash=90 get_cash=0
 
 A full reply looks like this:
 
@@ -214,11 +236,35 @@ Action: [SUBMIT_DEAL] to=[{ex}] give=[] give_cash=90 get=[Mediterranean Avenue] 
             game,
             player,
             f"{describe_state(game, player)}\n\n"
-            f"It is your turn to act. You may open ONE negotiation by proposing a trade to one "
-            f"player, or pass. Players you can make an offer to: {names}.\n"
+            f"It is your turn to act. You may open ONE negotiation: propose a trade to one player, "
+            f"float an idea to every player, or pass. Players you can make an offer to: {names}.\n"
             "Allowed actions: [SUBMIT_DEAL] to=[Player] give=[...] give_cash=N get=[...] get_cash=M, "
-            "or [PASS].",
+            "[FLOAT_IDEA] want=[...] give=[...] give_cash=N get_cash=M, or [PASS].",
         )
+        return self._call()
+
+    def respond_to_idea(self, game, player, proposer, idea_text, idea):
+        name = proposer.playerName
+        self._start(
+            game,
+            player,
+            f"{describe_state(game, player)}\n\n{idea_text}\n"
+            f"Allowed actions: [SUBMIT_DEAL] to=[{name}] give=[...] give_cash=N get=[...] get_cash=M "
+            f"(your offer to {name}; give = what YOU hand over, get = what YOU receive from {name}), "
+            "or [IGNORE].",
+        )
+        return self._call()
+
+    def choose_offer(self, game, player, offers_text, offers):
+        text = (
+            f"{offers_text}\n"
+            "Allowed actions: [ACCEPT_DEAL] from=[Player], [SUBMIT_DEAL] to=[Player] give=[...] "
+            "give_cash=N get=[...] get_cash=M (a counter-offer to one of them), or [WALK_AWAY]."
+        )
+        if not self.messages:  # normally the conversation from floating the idea is still open
+            self._start(game, player, f"{describe_state(game, player)}\n\n{text}")
+        else:
+            self.messages.append({"role": "user", "content": text})
         return self._call()
 
     def respond(self, game, player, opponent, incoming_text, offer):
@@ -254,14 +300,19 @@ class RuleBasedAgent(Agent):
 
     - Always buys what it can afford.
     - If propose=True, it offers a premium for any opponent property that would complete
-      one of its color sets, addressed to that property's owner. Otherwise it never starts a trade.
+      one of its color sets: addressed to that property's owner, or (float_ideas=True) as an
+      idea floated to every player. Otherwise it never starts a trade.
     - It accepts any offer that raises its strategic value, and rejects the rest.
+    - Answering an idea: if it owns a wanted property, it offers to sell it on the idea's
+      terms, asking for more cash if those terms would lower its strategic value.
+    - Choosing among offers: it accepts the one that raises its strategic value most, if any.
     """
 
-    def __init__(self, name, propose=True, premium=1.5):
+    def __init__(self, name, propose=True, premium=1.5, float_ideas=False):
         super().__init__(name)
         self.propose = propose
         self.premium = premium
+        self.float_ideas = float_ideas
 
     def decide_buy(self, game, player, tile):
         return _reply("Rule: always buy when I can afford it.", "", "[BUY]")
@@ -275,6 +326,12 @@ class RuleBasedAgent(Agent):
                     completes_set = bool(others) and all(t.ownerId == player.playerName for t in others)
                     cash = int(tile.price * self.premium)
                     if completes_set and player.cashBalance >= cash:
+                        if self.float_ideas:
+                            return _reply(
+                                f"{tile.name} completes my {tile.colorGroup} set; asking everyone.",
+                                f"Who will sell me {tile.name}? I can pay ${cash}.",
+                                f"[FLOAT_IDEA] want=[{tile.name}] give=[] give_cash={cash} get_cash=0",
+                            )
                         deal = Deal((), cash, (tile.index,), 0)
                         return _reply(
                             f"{tile.name} completes my {tile.colorGroup} set.",
@@ -282,6 +339,29 @@ class RuleBasedAgent(Agent):
                             f"[SUBMIT_DEAL] to=[{opponent.playerName}] {deal.to_tag_text(game.board)}",
                         )
         return _reply("Rule: nothing worth trading for.", "No trade for me this turn.", "[PASS]")
+
+    def respond_to_idea(self, game, player, proposer, idea_text, idea):
+        mine = tuple(i for i in idea.get_props if i in player.ownedProperties)
+        if not mine:
+            return _reply("Rule: I own nothing they want.", "", "[IGNORE]")
+        # Offer what they want on their terms (seen from my side), then make sure it helps me.
+        deal = Deal(mine, idea.get_cash, idea.give_props, idea.give_cash)
+        delta = game.dealValueDelta(player, deal)
+        if delta <= 0:
+            deal = Deal(mine, deal.give_cash, deal.get_props, deal.get_cash - delta + 10)
+        return _reply(
+            f"Rule: selling {len(mine)} property(ies) they want, for a gain.",
+            "I can do that.",
+            f"[SUBMIT_DEAL] to=[{proposer.playerName}] {deal.to_tag_text(game.board)}",
+        )
+
+    def choose_offer(self, game, player, offers_text, offers):
+        scored = {name: game.dealValueDelta(player, deal) for name, deal in offers.items()}
+        best = max(scored, key=scored.get)
+        if scored[best] > 0:
+            return _reply(f"Rule: {best}'s offer raises my value by {scored[best]}.", "Deal.",
+                          f"[ACCEPT_DEAL] from=[{best}]")
+        return _reply("Rule: no offer raises my value.", "No thanks.", "[WALK_AWAY]")
 
     def respond(self, game, player, opponent, incoming_text, offer):
         if offer is None:

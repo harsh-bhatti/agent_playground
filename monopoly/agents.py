@@ -71,8 +71,10 @@ def describe_state(game, player, opponent=None):
     ]
     if out:
         lines.append(f"Out of the game (bankrupt): {', '.join(out)}.")
+    my_props = ", ".join(game.board.getTile(i).name for i in player.ownedProperties) or "none"
     lines += [
         f"Your cash: ${player.cashBalance}. Your net worth (cash + property prices): ${game.calculateEquity(player)}.",
+        f"Properties you own: {my_props}.",
         "",
         "Opponents:",
     ]

@@ -3,7 +3,7 @@ import json
 from player import Player
 from board import Board
 from tile import PropertyTile
-from actions import EVERYONE
+from actions import EVERYONE, describe_side
 from negotiation import run_negotiation, ask_buy_decision
 
 # PLACEHOLDER for the research reward: how much extra "strategic value" a complete color
@@ -471,7 +471,12 @@ class GameManager:
             self.board.getTile(propId).ownerId = initiator.playerName
 
         print("  -> ACTION: Trade Accepted and Executed.")
-        self.logEvent(f"{initiator.playerName} and {target.playerName} completed a trade.")
+        # Say exactly what changed hands: agents read these events, and a vague "completed a
+        # trade" left them unsure who owned what (seen in live runs).
+        gave = describe_side(offerData["giveProps"], offerData["giveCash"], self.board)
+        got = describe_side(offerData["receiveProps"], offerData["receiveCash"], self.board)
+        self.logEvent(f"Trade: {initiator.playerName} gave {gave} to {target.playerName} "
+                      f"and received {got}.")
 
         # 3. Calculate post-trade values and print the RL Reward shift
         initiatorPostEquity = self.calculateEquity(initiator)

@@ -1332,6 +1332,33 @@ def test_summary_and_log_show_per_player_numbers():
     assert '"per_player"' in json_text
 
 
+# --------------------------------------------- live-run fixes: trade events
+def test_trade_event_says_what_changed_hands():
+    a = ScriptedAgent(A, open=[reply(TO_C)])
+    c = ScriptedAgent(C, respond=[reply("[ACCEPT_DEAL]")])
+    game = make_four(a=a, c=c)
+    open_four(game)
+    assert game.events[-1] == "Turn 0: Trade: Agent A gave $90 to Agent C and received Mediterranean Avenue."
+    assert not any("completed a trade" in e for e in game.events)
+
+
+def test_trade_event_for_a_swap_with_cash():
+    game = make_game()
+    a, b = game.getPlayer(A), game.getPlayer(B)
+    swap = {"giveCash": 20, "giveProps": [BALTIC], "receiveCash": 0, "receiveProps": [MED]}
+    with quiet():
+        game.executeTrade(a, b, swap)
+    assert game.events[-1].endswith("Agent A gave Baltic Avenue + $20 to Agent B and received Mediterranean Avenue.")
+
+
+def test_state_lists_your_own_properties():
+    from agents import describe_state
+
+    game = make_four()
+    assert "Properties you own: Baltic Avenue." in describe_state(game, game.getPlayer(A))
+    assert "Properties you own: none." in describe_state(game, game.getPlayer(D))
+
+
 # ------------------------------------------------------------------ runner
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]

@@ -256,6 +256,47 @@ class GameManager:
         return after - before
 
     # ----------------------------------------------------------------- trades
+    def tradePartners(self, player):
+        """Players `player` may negotiate with: still in the game and controlled by an agent."""
+        return [p for p in self.activePlayers()
+                if p.playerName != player.playerName and p.playerName in self.agents]
+
+    def resolveTradeTarget(self, speaker, targetText, partner=None):
+        """Work out who a [SUBMIT_DEAL] is for. Returns (player, None) or (None, reason).
+
+        partner: the player already in this negotiation, or None when opening one.
+        Inside a negotiation to=[...] may be left out, but if given it must name the partner.
+        When opening, to=[...] may be left out only if there is exactly one possible partner.
+        """
+        partners = self.tradePartners(speaker)
+        options = ", ".join(p.playerName for p in partners) or "nobody"
+        if targetText is None:
+            if partner is not None:
+                return partner, None
+            if len(partners) == 1:
+                return partners[0], None
+            return None, (f"Say who this offer is for: add to=[Player] to the [SUBMIT_DEAL] line. "
+                          f"You can trade with: {options}.")
+
+        wanted = targetText.strip().lower()
+        matches = [p for p in self.players if p.playerName.lower() == wanted]
+        if not matches:  # allow a short form such as "C" for "Agent C"
+            matches = [p for p in self.players if p.playerName.lower().split()[-1] == wanted]
+        if len(matches) != 1:
+            return None, f"There is no player called '{targetText}'. You can trade with: {options}."
+        target = matches[0]
+
+        if target.playerName == speaker.playerName:
+            return None, f"You cannot make an offer to yourself. You can trade with: {options}."
+        if partner is not None and target.playerName != partner.playerName:
+            return None, (f"You are negotiating with {partner.playerName}, so to=[...] must be "
+                          f"{partner.playerName} (or left out).")
+        if target.isBankrupt:
+            return None, f"{target.playerName} is bankrupt and out of the game. You can trade with: {options}."
+        if target not in partners:
+            return None, f"{target.playerName} cannot negotiate. You can trade with: {options}."
+        return target, None
+
     def validateTrade(self, initiator, target, offerData):
         """Return None if the trade is legal, otherwise a plain-English reason it is not."""
         if initiator.playerName == target.playerName:
@@ -282,6 +323,12 @@ class GameManager:
                 if propId in initiator.ownedProperties:
                     return (f"{tile.name} is in get=[...], but {initiator.playerName} already owns it, so "
                             f"{target.playerName} does not own it. To SELL it, list it in give=[...] instead.")
+                if isinstance(tile, PropertyTile) and tile.ownerId is None:
+                    return (f"{tile.name} is unowned (the bank has it), so nobody can trade it. "
+                            f"The only way to get it is to land on it and buy it.")
+                if isinstance(tile, PropertyTile) and tile.ownerId:
+                    return (f"{tile.name} belongs to {tile.ownerId}, not {target.playerName}. To ask for it, "
+                            f"make the offer to {tile.ownerId} with to=[{tile.ownerId}].")
                 return (f"{target.playerName} does not own {tile.name}, so it cannot be received. "
                         f"get=[...] must list properties {target.playerName} owns.")
             if tile.houseCount > 0:
@@ -371,25 +418,19 @@ class GameManager:
 
     # ------------------------------------------------------------ negotiation
     def negotiationPhase(self, player):
-        """After moving, the active player's agent may open a negotiation.
+        """After moving, the active player's agent may open ONE negotiation.
 
-        For now only 2-player games negotiate. Games set up with more players skip this
-        step until choosing a partner is added (phase 2 of the N-player plan).
+        Only the active player may open. Its opening [SUBMIT_DEAL] names the partner with
+        to=[...]; the engine checks that partner before anything else happens.
         """
         if self.agents.get(player.playerName) is None:
             return
-        if len(self.players) != 2:
-            return  # N-player negotiation is not built yet
-        opponents = [p for p in self.activePlayers() if p.playerName != player.playerName]
-        if not opponents:
-            return  # nobody left to trade with
-        opponent = opponents[0]
-        if opponent.playerName not in self.agents:
-            return  # nobody on the other side to talk to
+        if not self.tradePartners(player):
+            return  # nobody (with an agent) left to talk to
         if not any(p.ownedProperties for p in self.players):
             return  # nothing to trade yet; skip so we do not waste model calls
 
-        result = run_negotiation(self, player, opponent, self.maxNegotiationTurns)
+        result = run_negotiation(self, player, None, self.maxNegotiationTurns)
         self.negotiationResults.append(result)
 
     # ----------------------------------------------------------- game state

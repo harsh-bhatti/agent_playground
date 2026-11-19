@@ -42,6 +42,7 @@ class Turn:
     talk: str | None = None
     deal: object = None
     deal_text: str | None = None
+    target: str | None = None  # who a [SUBMIT_DEAL] was for (checked by the engine)
     format_ok: bool = True  # did the FIRST reply follow Thought / Talk / Action?
     attempts: int = 1
     fell_back: bool = False  # True if the replies were invalid and we used the harmless default
@@ -58,7 +59,7 @@ class Turn:
 class NegotiationResult:
     game_turn: int
     initiator: str
-    responder: str
+    responder: str | None  # chosen by the initiator's opening offer; None if it passed
     outcome: str = "max_turns"  # deal | walk_away | declined | max_turns | reject_loop | invalid_deal
     proposer: str | None = None
     deal_text: str | None = None  # from the proposer's point of view
@@ -73,7 +74,11 @@ class NegotiationResult:
 # Asking an agent for one valid action
 # ---------------------------------------------------------------------------
 def get_valid_action(game, agent, speaker, listener, decision, first_call, pending=None, pending_by=None):
-    """Get a legal action from an agent. Retries once with the exact problem, then falls back."""
+    """Get a legal action from an agent. Retries once with the exact problem, then falls back.
+
+    listener: the player already in this negotiation, or None (a buy decision, or an
+    opening offer whose to=[...] still has to pick the partner).
+    """
     allowed = {"buy": BUY_ACTIONS, "open": OPEN_ACTIONS, "respond": RESPOND_ACTIONS}[decision]
     need_talk = decision != "buy"
     tokens_before = llm_client.total_tokens_used
@@ -87,9 +92,12 @@ def get_valid_action(game, agent, speaker, listener, decision, first_call, pendi
         attempts += 1
         parsed = parse_reply(reply, need_talk)
         act = parse_action(parsed, allowed, game.board)
+        target = None
         if act.error is None:
             if act.kind == "SUBMIT_DEAL":
-                act.error = game.validateTrade(speaker, listener, act.deal.to_offer_data())
+                target, act.error = game.resolveTradeTarget(speaker, act.target, listener)
+                if act.error is None:
+                    act.error = game.validateTrade(speaker, target, act.deal.to_offer_data())
             elif act.kind == "ACCEPT_DEAL" and (pending is None or pending_by == speaker.playerName):
                 act.error = "There is no offer from the other player to accept."
         if first_format_ok is None:
@@ -111,6 +119,7 @@ def get_valid_action(game, agent, speaker, listener, decision, first_call, pendi
         talk=None if fell_back else parsed.talk,
         deal=deal,
         deal_text=deal.to_tag_text(game.board) if deal else None,
+        target=target.playerName if (deal and target) else None,
         format_ok=first_format_ok,
         attempts=attempts,
         fell_back=fell_back,
@@ -127,6 +136,8 @@ def _print_turn(game, turn):
     if turn.talk:
         print(f'     {turn.speaker}: "{turn.talk}"')
     text = f"[{turn.kind}]"
+    if turn.target:
+        text += f" to {turn.target}:"
     if turn.deal:
         text += f" {turn.deal.describe(game.board)}"
     note = ""
@@ -171,30 +182,37 @@ def _offer_message(game, speaker, talk, deal_for_listener):
     )
 
 
-def run_negotiation(game, initiator, responder, max_turns=6):
+def run_negotiation(game, initiator, responder=None, max_turns=6):
     """The initiator may propose a trade; the two players then take turns until it ends.
 
+    responder=None: the initiator's opening [SUBMIT_DEAL] picks the partner with to=[...].
+    Passing a responder fixes the partner in advance (to=[...] may then be left out).
     A "turn" is one agent reply (so max_turns=6 means at most 6 model calls, plus retries).
     Returns a NegotiationResult.
     """
     result = NegotiationResult(
-        game_turn=game.turnCount, initiator=initiator.playerName, responder=responder.playerName
+        game_turn=game.turnCount,
+        initiator=initiator.playerName,
+        responder=responder.playerName if responder else None,
     )
-    agents = {p.playerName: game.agents[p.playerName] for p in (initiator, responder)}
+    agents = {p.playerName: game.agents[p.playerName] for p in (initiator, responder) if p}
     speaker, listener = initiator, responder
     pending = None  # the standing offer, written from the proposer's point of view
     pending_by = None
     incoming_text = None
     incoming_offer = None
-    submits = {initiator.playerName: [], responder.playerName: []}
+    submits = {}  # each player's offers, to spot one being repeated
 
-    print(f"  [NEGOTIATION] {initiator.playerName} may open a trade with {responder.playerName}.")
+    # What the opening agent is told it may do: one fixed partner, or every possible partner.
+    choices = [responder] if responder else game.tradePartners(initiator)
+    print(f"  [NEGOTIATION] {initiator.playerName} may open a trade with "
+          f"{', '.join(p.playerName for p in choices)}.")
     try:
         for index in range(max_turns):
             agent = agents[speaker.playerName]
             if index == 0:
                 decision = "open"
-                first_call = lambda: agent.open_negotiation(game, speaker, listener)
+                first_call = lambda: agent.open_negotiation(game, speaker, choices)
             else:
                 decision = "respond"
                 first_call = lambda: agent.respond(game, speaker, listener, incoming_text, incoming_offer)
@@ -224,10 +242,14 @@ def run_negotiation(game, initiator, responder, max_turns=6):
                     result.outcome = "invalid_deal"
                 break
             if kind == "SUBMIT_DEAL":
+                if listener is None:  # the opening offer chose the partner
+                    listener = game.getPlayer(turn.target)
+                    agents[listener.playerName] = game.agents[listener.playerName]
+                    result.responder = listener.playerName
                 pending, pending_by = turn.deal, speaker.playerName
                 incoming_offer = turn.deal.flipped()
                 incoming_text = _offer_message(game, speaker, turn.talk, incoming_offer)
-                history = submits[speaker.playerName]
+                history = submits.setdefault(speaker.playerName, [])
                 history.append(turn.deal_text)
                 if len(history) >= 3 and len(set(history[-3:])) == 1:
                     result.outcome = "reject_loop"

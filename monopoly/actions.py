@@ -8,9 +8,11 @@ The reply format is borrowed from last year's negotiation project:
     Talk: what you say to the other player
     Action: [TAG] ...
 
-Deal terms are always written from the point of view of the player who wrote them:
+Deal terms are always written from the point of view of the player who wrote them.
+to=[...] names the player the offer is for (needed when opening a negotiation in a game
+with more than 2 players; the engine checks it):
 
-    [SUBMIT_DEAL] give=[Reading Railroad] give_cash=50 get=[Baltic Avenue] get_cash=0
+    [SUBMIT_DEAL] to=[Agent C] give=[Reading Railroad] give_cash=50 get=[Baltic Avenue] get_cash=0
 """
 import re
 from dataclasses import dataclass
@@ -26,8 +28,24 @@ OPEN_ACTIONS = ("SUBMIT_DEAL", "PASS")
 RESPOND_ACTIONS = ("SUBMIT_DEAL", "ACCEPT_DEAL", "REJECT_DEAL", "WALK_AWAY")
 
 DEAL_FORMAT_HINT = (
-    "Use exactly: [SUBMIT_DEAL] give=[Property, Property] give_cash=N get=[Property] get_cash=M"
+    "Use exactly: [SUBMIT_DEAL] to=[Player] give=[Property, Property] give_cash=N "
+    "get=[Property] get_cash=M"
 )
+
+# to=[Agent C], or the forgiving form to=Agent C (ending before give/get or the line end).
+_TO_RE = re.compile(
+    r"\bto\s*=\s*(?:\[([^\]]*)\]|([^\[\]\n]+?)(?=\s+(?:give|get)\b|\s*$))",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def parse_target(text):
+    """The player name written in to=[...], or None if there is no to=. Not checked here."""
+    match = _TO_RE.search(text or "")
+    if not match:
+        return None
+    name = (match.group(1) if match.group(1) is not None else match.group(2)).strip(" \"'")
+    return name or None
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +216,7 @@ class ParsedAction:
     kind: str | None = None  # one of ALL_TAGS, or None if the reply was unusable
     deal: Deal | None = None
     error: str | None = None  # plain-English problem, sent back to the model for a retry
+    target: str | None = None  # the name written in to=[...] (SUBMIT_DEAL only), unchecked
 
 
 def parse_action(parsed, allowed, board):
@@ -240,5 +259,5 @@ def parse_action(parsed, allowed, board):
         deal, error = parse_deal(text, board)
         if error:
             return ParsedAction(error=error)
-        return ParsedAction(kind=kind, deal=deal)
+        return ParsedAction(kind=kind, deal=deal, target=parse_target(text))
     return ParsedAction(kind=kind)

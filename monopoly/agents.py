@@ -40,6 +40,11 @@ def _opponent_names(game, player):
     return [p.playerName for p in game.activePlayers() if p.playerName != player.playerName]
 
 
+def _as_list(opponents):
+    """open_negotiation receives a list of players; accept a single player too (older callers)."""
+    return list(opponents) if isinstance(opponents, (list, tuple)) else [opponents]
+
+
 # ---------------------------------------------------------------------------
 # Turning the game into text a model can read
 # ---------------------------------------------------------------------------
@@ -105,7 +110,12 @@ class Agent:
     def decide_buy(self, game, player, tile):
         raise NotImplementedError
 
-    def open_negotiation(self, game, player, opponent):
+    def open_negotiation(self, game, player, opponents):
+        """`opponents` is the list of players this agent may make an offer to.
+
+        To open, return [SUBMIT_DEAL] to=[name] ... (to=[...] may be left out when the list
+        has only one player), or [PASS].
+        """
         raise NotImplementedError
 
     def respond(self, game, player, opponent, incoming_text, offer):
@@ -131,6 +141,7 @@ class LLMAgent(Agent):
     def _system_prompt(self, opponent_names):
         persona = f"\n{self.persona}\n" if self.persona else ""
         opponents = ", ".join(opponent_names)
+        ex = opponent_names[0] if opponent_names else "Agent B"  # partner name used in the examples
         return f"""\
 You are {self.name}, playing a simplified game of Monopoly with {len(opponent_names) + 1} players. Your opponents are: {opponents}. Your goal is to finish with the highest net worth of all players. Net worth is your cash plus the price of your properties.
 
@@ -138,38 +149,39 @@ Rules of this version:
 - Players roll dice and move. Landing on an unowned property lets you buy it. Landing on someone else's property means paying them rent.
 - The ONLY ways to get a property are buying it right after you land on it, or trading with another player. You cannot buy an unowned property just by choosing to.
 - Owning EVERY property of a color group doubles the rent on those properties. Railroad rent grows with how many railroads the owner holds.
-- Players may trade properties and cash. A trade only happens if both players agree, and each side must really own what it gives.
+- Players may trade properties and cash. A trade is always between two players: it only happens if both agree, and each side must really own what it gives.
+- On your turn you may open ONE negotiation, with the one player you choose.
 - A player who cannot pay rent or tax is bankrupt and out of the game.
 {persona}
 Reply format (always in this order):
 
-Thought: brief private reasoning (the other player never sees this)
-Talk: what you say to the other player (one or two sentences)
+Thought: brief private reasoning (no other player ever sees this)
+Talk: what you say to the player you are negotiating with (one or two sentences)
 Action: exactly one action tag from the list in the message you are answering
 
 Action tags:
 [BUY] or [PASS] - buy the property you landed on, or decline. [PASS] also means "no trade this turn".
-[SUBMIT_DEAL] give=[Property, Property] give_cash=N get=[Property] get_cash=M - propose or counter-propose a trade. give and get are ALWAYS from YOUR point of view: give is what YOU hand over (properties YOU own, plus cash from you); get is what YOU receive (properties the OTHER player owns, plus cash from them). Use exact property names, [] for none, and whole dollars.
+[SUBMIT_DEAL] to=[Player] give=[Property, Property] give_cash=N get=[Property] get_cash=M - propose or counter-propose a trade. to is the player the offer is for: it is required when you open a negotiation, and must be the player who owns the properties in get. In a negotiation that is already going on, to can be left out. give and get are ALWAYS from YOUR point of view: give is what YOU hand over (properties YOU own, plus cash from you); get is what YOU receive (properties the player in to owns, plus cash from them). Use exact property names, [] for none, and whole dollars.
 [ACCEPT_DEAL] - accept the other player's latest [SUBMIT_DEAL] exactly as written. Only valid when there is an offer to accept.
 [REJECT_DEAL] - turn the latest offer down without new terms.
 [WALK_AWAY] - end the negotiation.
 
-Examples of the Action line (the properties here are only illustrations):
+Examples of the Action line (the players and properties here are only illustrations):
 
-To BUY a property the other player owns, for cash:
-Action: [SUBMIT_DEAL] give=[] give_cash=90 get=[Mediterranean Avenue] get_cash=0
+To BUY a property {ex} owns, for cash:
+Action: [SUBMIT_DEAL] to=[{ex}] give=[] give_cash=90 get=[Mediterranean Avenue] get_cash=0
 
-To SELL a property you own, for cash:
-Action: [SUBMIT_DEAL] give=[Baltic Avenue] give_cash=0 get=[] get_cash=90
+To SELL a property you own to {ex}, for cash:
+Action: [SUBMIT_DEAL] to=[{ex}] give=[Baltic Avenue] give_cash=0 get=[] get_cash=90
 
-To SWAP properties:
-Action: [SUBMIT_DEAL] give=[Baltic Avenue] give_cash=0 get=[Mediterranean Avenue] get_cash=20
+To SWAP properties with {ex}:
+Action: [SUBMIT_DEAL] to=[{ex}] give=[Baltic Avenue] give_cash=0 get=[Mediterranean Avenue] get_cash=20
 
 A full reply looks like this:
 
 Thought: Mediterranean Avenue would complete my Brown set, so I will pay a premium for it.
 Talk: I'd like Mediterranean Avenue. I'll give you $90 for it.
-Action: [SUBMIT_DEAL] give=[] give_cash=90 get=[Mediterranean Avenue] get_cash=0"""
+Action: [SUBMIT_DEAL] to=[{ex}] give=[] give_cash=90 get=[Mediterranean Avenue] get_cash=0"""
 
     def _call(self):
         reply = llm_client.chat(self.messages, max_tokens=self.max_tokens)
@@ -196,14 +208,16 @@ Action: [SUBMIT_DEAL] give=[] give_cash=90 get=[Mediterranean Avenue] get_cash=0
         )
         return self._call()
 
-    def open_negotiation(self, game, player, opponent):
+    def open_negotiation(self, game, player, opponents):
+        names = ", ".join(p.playerName for p in _as_list(opponents))
         self._start(
             game,
             player,
             f"{describe_state(game, player)}\n\n"
-            f"It is your turn to act. You may open a negotiation with {opponent.playerName} by "
-            "proposing a trade, or pass.\n"
-            "Allowed actions: [SUBMIT_DEAL] give=[...] give_cash=N get=[...] get_cash=M, or [PASS].",
+            f"It is your turn to act. You may open ONE negotiation by proposing a trade to one "
+            f"player, or pass. Players you can make an offer to: {names}.\n"
+            "Allowed actions: [SUBMIT_DEAL] to=[Player] give=[...] give_cash=N get=[...] get_cash=M, "
+            "or [PASS].",
         )
         return self._call()
 
@@ -240,7 +254,7 @@ class RuleBasedAgent(Agent):
 
     - Always buys what it can afford.
     - If propose=True, it offers a premium for any opponent property that would complete
-      one of its color sets. Otherwise it never starts a trade.
+      one of its color sets, addressed to that property's owner. Otherwise it never starts a trade.
     - It accepts any offer that raises its strategic value, and rejects the rest.
     """
 
@@ -252,20 +266,21 @@ class RuleBasedAgent(Agent):
     def decide_buy(self, game, player, tile):
         return _reply("Rule: always buy when I can afford it.", "", "[BUY]")
 
-    def open_negotiation(self, game, player, opponent):
+    def open_negotiation(self, game, player, opponents):
         if self.propose:
-            for prop_id in opponent.ownedProperties:
-                tile = game.board.getTile(prop_id)
-                others = [t for t in game.colorGroups()[tile.colorGroup] if t.index != tile.index]
-                completes_set = bool(others) and all(t.ownerId == player.playerName for t in others)
-                cash = int(tile.price * self.premium)
-                if completes_set and player.cashBalance >= cash:
-                    deal = Deal((), cash, (tile.index,), 0)
-                    return _reply(
-                        f"{tile.name} completes my {tile.colorGroup} set.",
-                        f"I'd like {tile.name}. I'll pay ${cash} for it.",
-                        f"[SUBMIT_DEAL] {deal.to_tag_text(game.board)}",
-                    )
+            for opponent in _as_list(opponents):  # first match in turn order
+                for prop_id in opponent.ownedProperties:
+                    tile = game.board.getTile(prop_id)
+                    others = [t for t in game.colorGroups()[tile.colorGroup] if t.index != tile.index]
+                    completes_set = bool(others) and all(t.ownerId == player.playerName for t in others)
+                    cash = int(tile.price * self.premium)
+                    if completes_set and player.cashBalance >= cash:
+                        deal = Deal((), cash, (tile.index,), 0)
+                        return _reply(
+                            f"{tile.name} completes my {tile.colorGroup} set.",
+                            f"I'd like {tile.name}. I'll pay ${cash} for it.",
+                            f"[SUBMIT_DEAL] to=[{opponent.playerName}] {deal.to_tag_text(game.board)}",
+                        )
         return _reply("Rule: nothing worth trading for.", "No trade for me this turn.", "[PASS]")
 
     def respond(self, game, player, opponent, incoming_text, offer):

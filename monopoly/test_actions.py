@@ -703,13 +703,163 @@ def test_llm_prompt_names_all_opponents():
     assert "two-player" not in system and "highest net worth of all players" in system
 
 
-def test_four_player_games_have_no_negotiation_yet():
-    game = GameManager(FOUR, agents={n: RuleBasedAgent(n) for n in FOUR})
-    random.seed(3)
+# --------------------------------------------- choosing a partner (phase 2)
+def make_four(**scripted):
+    """4-player game: A owns Baltic, B owns Reading Railroad, C owns Mediterranean.
+
+    Pass ScriptedAgents by player name (a=..., c=...); everyone else gets a do-nothing agent.
+    """
+    agents = {n: scripted.get(n[-1].lower()) or ScriptedAgent(n) for n in FOUR}
+    game = GameManager(FOUR, agents=agents)
+    give_property(game, A, "Baltic Avenue")
+    give_property(game, B, "Reading Railroad")
+    give_property(game, C, "Mediterranean Avenue")
+    return game
+
+
+def open_four(game):
+    from negotiation import run_negotiation
+
     with quiet():
-        for _ in range(40):
-            game.executeTurn()
-    assert game.negotiationResults == []  # comes in phase 2 (choosing a partner)
+        return run_negotiation(game, game.getPlayer(A), None, game.maxNegotiationTurns)
+
+
+TO_C = "[SUBMIT_DEAL] to=[Agent C] give=[] give_cash=90 get=[Mediterranean Avenue] get_cash=0"
+
+
+def test_parse_to_target():
+    def target(action):
+        return parse_action(parse_reply(reply(action)), OPEN_ACTIONS, BOARD).target
+
+    assert target(TO_C) == "Agent C"
+    assert target("[SUBMIT_DEAL] to=Agent C give=[] give_cash=90 get=[Baltic] get_cash=0") == "Agent C"
+    assert target("[SUBMIT_DEAL] give=[] give_cash=9 get=[Baltic] get_cash=0 to=[Agent D]") == "Agent D"
+    assert target(OFFER) is None
+
+
+def test_resolve_trade_target_rules():
+    game = make_four()
+    a = game.getPlayer(A)
+    with quiet():
+        game.declareBankruptcy(game.getPlayer(D), 10, None, "test")
+    resolve = game.resolveTradeTarget
+    assert resolve(a, "Agent C")[0].playerName == C
+    assert resolve(a, "agent c")[0].playerName == C and resolve(a, "C")[0].playerName == C
+    assert "to=[Player]" in resolve(a, None)[1] and "Agent B, Agent C" in resolve(a, None)[1]
+    assert "no player called" in resolve(a, "Agent Z")[1]
+    assert "yourself" in resolve(a, "Agent A")[1]
+    assert "bankrupt" in resolve(a, "Agent D")[1]
+    # inside a negotiation with B: to= may be left out, but may not name someone else
+    assert resolve(a, None, game.getPlayer(B))[0].playerName == B
+    assert "negotiating with Agent B" in resolve(a, "Agent C", game.getPlayer(B))[1]
+
+
+def test_target_without_agent_is_refused():
+    game = GameManager(FOUR, agents={A: ScriptedAgent(A), B: ScriptedAgent(B)})
+    _, err = game.resolveTradeTarget(game.getPlayer(A), "Agent C")
+    assert "cannot negotiate" in err
+    assert game.resolveTradeTarget(game.getPlayer(A), None)[0].playerName == B  # only one partner
+
+
+def test_validation_names_the_real_owner_and_unowned_properties():
+    game = make_four()
+    a, b = game.getPlayer(A), game.getPlayer(B)
+    ask_b_for_c = {"giveCash": 90, "giveProps": [], "receiveCash": 0,
+                   "receiveProps": [tile_id("Mediterranean Avenue")]}
+    msg = game.validateTrade(a, b, ask_b_for_c)
+    assert "belongs to Agent C, not Agent B" in msg and "to=[Agent C]" in msg
+    ask_unowned = {"giveCash": 90, "giveProps": [], "receiveCash": 0,
+                   "receiveProps": [tile_id("Vermont Avenue")]}
+    assert "unowned" in game.validateTrade(a, b, ask_unowned)
+
+
+def test_four_player_targeted_deal():
+    a = ScriptedAgent(A, open=[reply(TO_C, "I'll pay $90")])
+    c = ScriptedAgent(C, respond=[reply("[ACCEPT_DEAL]", "Deal")])
+    game = make_four(a=a, c=c)
+    result = open_four(game)
+    assert result.outcome == "deal" and result.responder == C and result.turns[0]["target"] == C
+    assert game.ownsFullSet(A, "Brown")
+    assert game.getPlayer(A).cashBalance == 1410 and game.getPlayer(C).cashBalance == 1590
+    assert game.getPlayer(B).cashBalance == 1500 and game.getPlayer(D).cashBalance == 1500  # untouched
+    assert "YOU would give: Mediterranean Avenue" in c.incoming[0]
+    check_invariants(game)
+
+
+def test_missing_target_is_corrected_with_a_retry():
+    a = ScriptedAgent(A, open=[reply(OFFER)], correct=[reply(TO_C)])
+    c = ScriptedAgent(C, respond=[reply("[ACCEPT_DEAL]")])
+    game = make_four(a=a, c=c)
+    result = open_four(game)
+    assert result.outcome == "deal" and "to=[Player]" in a.errors[0]
+    assert result.turns[0]["attempts"] == 2
+
+
+def test_offer_to_the_wrong_owner_falls_back_safely():
+    to_b = "[SUBMIT_DEAL] to=[Agent B] give=[] give_cash=90 get=[Mediterranean Avenue] get_cash=0"
+    a = ScriptedAgent(A, open=[reply(to_b)], correct=[reply(to_b)])
+    game = make_four(a=a)
+    result = open_four(game)
+    assert result.outcome == "declined" and result.responder is None
+    assert "belongs to Agent C" in a.errors[0]
+    assert game.getPlayer(A).cashBalance == 1500  # nothing changed
+    check_invariants(game)
+
+
+def test_counter_offer_may_not_switch_partner():
+    counter = "give=[Mediterranean Avenue] give_cash=0 get=[] get_cash=150"
+    a = ScriptedAgent(A, open=[reply(TO_C)], respond=[reply("[WALK_AWAY]")])
+    c = ScriptedAgent(C, respond=[reply(f"[SUBMIT_DEAL] to=[Agent B] {counter}")],  # wrong partner
+                      correct=[reply(f"[SUBMIT_DEAL] to=[Agent A] {counter}")])
+    game = make_four(a=a, c=c)
+    result = open_four(game)
+    assert "negotiating with Agent A" in c.errors[0]
+    assert result.turns[1]["target"] == A and result.outcome == "walk_away"
+
+
+def test_rule_based_agent_targets_the_owner():
+    game = GameManager(FOUR, agents={n: RuleBasedAgent(n) for n in FOUR})
+    give_property(game, A, "Baltic Avenue")
+    give_property(game, B, "Reading Railroad")
+    give_property(game, C, "Mediterranean Avenue")
+    with quiet():
+        game.negotiationPhase(game.getPlayer(A))
+    result = game.negotiationResults[0]
+    assert result.outcome == "deal" and result.responder == C
+    assert game.ownsFullSet(A, "Brown")
+    check_invariants(game)
+
+
+def test_llm_open_prompt_lists_partners_and_to():
+    sent = []
+    real = llm_client.chat
+    llm_client.chat = lambda messages, **kw: sent.append([dict(m) for m in messages]) or reply("[PASS]")
+    try:
+        agent = LLMAgent(A)
+        game = make_four(a=agent)
+        a = game.getPlayer(A)
+        agent.open_negotiation(game, a, game.tradePartners(a))
+    finally:
+        llm_client.chat = real
+    assert "Players you can make an offer to: Agent B, Agent C, Agent D." in sent[0][1]["content"]
+    assert "[SUBMIT_DEAL] to=[Agent B]" in sent[0][0]["content"]  # example uses a real name
+
+
+def test_four_player_mock_games_trade_between_valid_pairs():
+    deals = 0
+    for seed in range(10):
+        random.seed(seed)
+        game = GameManager(FOUR, agents={n: RuleBasedAgent(n) for n in FOUR})
+        with quiet():
+            for _ in range(150):
+                game.executeTurn()
+                check_invariants(game)
+        for r in game.negotiationResults:
+            if r.trade:
+                deals += 1
+                assert r.trade["initiator"] == r.initiator and r.trade["target"] == r.responder
+                assert r.initiator != r.responder
+    assert deals > 0, "rule bots never traded in 10 four-player games"
 
 
 def test_four_player_mock_games_keep_ownership_consistent():

@@ -1,7 +1,14 @@
-"""The only file that talks to a model provider.
+"""The only file that talks to the model.
 
-To switch providers or models (Groq -> DeepSeek -> a paid model -> a server on SOL),
-change the three values below. Nothing else in the project needs to change.
+It uses ASU CreateAI through its OpenAI-compatible API (the "Optional: Use the
+OpenAI-Compatible SDK" part of the CreateAI tutorial). Put these in the .env file at the
+project root (see .env.example):
+
+    CREATEAI_API_KEY=your_project_service_token_here     (the token only, no "Bearer")
+    CREATEAI_BASE_URL=https://api-main.aiml.asu.edu      (optional; this is the default)
+    LLM_MODEL=openai/gpt4o                               (optional; IDs are "provider/model")
+
+Nothing else in the project needs to change to switch models.
 """
 import os
 import time
@@ -11,15 +18,12 @@ from openai import BadRequestError, OpenAI, RateLimitError
 
 load_dotenv()
 
-# --- Change these to switch providers or models ---------------------------
-BASE_URL = "https://api.groq.com/openai/v1"
-API_KEY_ENV = "GROQ_API_KEY"
-MODEL = "openai/gpt-oss-120b"
+# --- Settings -------------------------------------------------------------
+BASE_URL = os.getenv("CREATEAI_BASE_URL", "https://api-main.aiml.asu.edu").rstrip("/") + "/v1"
+API_KEY_ENV = "CREATEAI_API_KEY"
+MODEL = os.getenv("LLM_MODEL") or "openai/gpt6_luna"  # lightweight model for testing the agents
 # ---------------------------------------------------------------------------
 
-# gpt-oss "thinks" before answering, and thinking tokens count against your daily limit.
-# "low" keeps it short. Set to None for models that do not support this option.
-REASONING_EFFORT = "low"
 TEMPERATURE = 0.7
 MAX_ATTEMPTS = 4
 
@@ -60,13 +64,7 @@ def chat(messages, max_tokens=800, temperature=None):
         max_tokens=max_tokens,
         temperature=TEMPERATURE if temperature is None else temperature,
     )
-    use_effort = REASONING_EFFORT is not None
-
     for attempt in range(MAX_ATTEMPTS):
-        if use_effort:
-            kwargs["extra_body"] = {"reasoning_effort": REASONING_EFFORT}
-        else:
-            kwargs.pop("extra_body", None)
         try:
             response = _get_client().chat.completions.create(**kwargs)
         except RateLimitError as error:
@@ -78,9 +76,16 @@ def chat(messages, max_tokens=800, temperature=None):
             time.sleep(wait)
             continue
         except BadRequestError as error:
-            if use_effort:
-                print("  [LLM] This model rejected reasoning_effort; retrying without it.")
-                use_effort = False
+            # Different models accept different options. Drop or rename the one the model
+            # complained about and try again; anything else is a real error.
+            text = str(error).lower()
+            if "max_tokens" in text and "max_tokens" in kwargs:
+                print("  [LLM] This model wants max_completion_tokens instead of max_tokens; retrying.")
+                kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
+                continue
+            if "temperature" in text and "temperature" in kwargs:
+                print("  [LLM] This model rejected the temperature setting; retrying with its default.")
+                kwargs.pop("temperature")
                 continue
             raise LLMError(f"The model rejected the request: {error}") from error
 

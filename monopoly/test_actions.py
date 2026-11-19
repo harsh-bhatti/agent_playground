@@ -353,6 +353,73 @@ def test_llm_agent_builds_conversation():
         llm_client.chat = real
 
 
+# ------------------------------------------- llm_client (fake client, no API)
+def test_createai_provider_settings():
+    assert llm_client.BASE_URL.endswith("/v1")  # the OpenAI-compatible API lives under /v1
+    assert llm_client.API_KEY_ENV == "CREATEAI_API_KEY"
+    assert "groq" not in llm_client.BASE_URL
+
+
+class _FakeCompletions:
+    """Stands in for client.chat.completions. Raises the queued errors, then replies."""
+
+    def __init__(self, errors):
+        self.errors = list(errors)
+        self.calls = []
+
+    def create(self, **kwargs):
+        import types
+
+        self.calls.append(dict(kwargs))
+        if self.errors:
+            raise self.errors.pop(0)
+        message = types.SimpleNamespace(content="hello")
+        return types.SimpleNamespace(
+            choices=[types.SimpleNamespace(message=message, finish_reason="stop")],
+            usage=types.SimpleNamespace(total_tokens=7),
+        )
+
+
+def _bad_request(text):
+    import httpx2
+    from openai import BadRequestError
+
+    response = httpx2.Response(400, request=httpx2.Request("POST", "http://offline.test"))
+    return BadRequestError(text, response=response, body=None)
+
+
+def _with_fake_client(errors, func):
+    import types
+
+    completions = _FakeCompletions(errors)
+    real_client = llm_client._client
+    llm_client._client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=completions))
+    try:
+        with quiet():
+            result = func()
+    finally:
+        llm_client._client = real_client
+    return result, completions.calls
+
+
+def test_chat_adapts_when_model_rejects_options():
+    errors = [_bad_request("Unsupported parameter: 'max_tokens'. Use 'max_completion_tokens'."),
+              _bad_request("Unsupported value: 'temperature' does not support 0.7.")]
+    reply_text, calls = _with_fake_client(errors, lambda: llm_client.chat([{"role": "user", "content": "hi"}]))
+    assert reply_text == "hello" and len(calls) == 3
+    assert "max_tokens" not in calls[2] and calls[2]["max_completion_tokens"] == 800
+    assert "temperature" not in calls[2]
+
+
+def test_chat_reports_other_bad_requests():
+    try:
+        _with_fake_client([_bad_request("model not enabled for this project")],
+                          lambda: llm_client.chat([{"role": "user", "content": "hi"}]))
+        raise AssertionError("expected LLMError")
+    except llm_client.LLMError as error:
+        assert "model not enabled" in str(error)
+
+
 # -------------------------------------------------------- full random games
 def test_full_mock_games_keep_ownership_consistent():
     for seed in range(20):

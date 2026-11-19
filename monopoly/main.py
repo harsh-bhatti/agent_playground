@@ -103,7 +103,7 @@ def save_log(game, args, stopped_early):
     os.makedirs(folder, exist_ok=True)
     path = os.path.abspath(os.path.join(folder, time.strftime("run_%Y%m%d_%H%M%S.json")))
     data = {
-        "settings": {**vars(args), "model": llm_client.MODEL},
+        "settings": {**vars(args), "base_url": llm_client.BASE_URL, "model": llm_client.MODEL},
         "stopped_early": stopped_early,
         "turns_played": game.turnCount,
         **game.gameResult(),  # winner, end_reason, bankruptcies

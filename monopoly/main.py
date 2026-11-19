@@ -62,8 +62,8 @@ def describe_result(game):
         return f"Winner: {game.winner} ({out})"
     if reason == "turn_limit":
         if game.winner:
-            return f"Winner: {game.winner} (highest net worth after {game.turnCount} turns)"
-        return f"Result: draw (equal net worth after {game.turnCount} turns)"
+            return f"Winner: {game.winner} (highest score after {game.turnCount} turns)"
+        return f"Result: draw (equal score after {game.turnCount} turns)"
     if reason == "stopped_early":
         return "Result: no winner (game stopped early)"
     return "Result: game not finished"
@@ -128,8 +128,8 @@ def per_player_stats(game):
 
 
 def print_player_table(stats):
-    print("Per player (trades scored against not trading; worse = below 0, strategic/net worth):")
-    print(f"  {'player':<10}{'deals':>6}{'strategic':>11}{'net worth':>11}{'worse s/n':>11}"
+    print("Per player (trades scored against not trading; worse = below 0, score/net worth):")
+    print(f"  {'player':<10}{'deals':>6}{'score':>11}{'net worth':>11}{'worse s/n':>11}"
           f"{'zero gain':>11}{'opened':>8}{'ideas':>7}{'calls':>7}{'capped':>8}{'tokens':>8}")
     for name, s in stats.items():
         worse = f"{s['deals_worse_strategic']}/{s['deals_worse_net_worth']}"
@@ -150,7 +150,7 @@ def print_summary(game, stopped_early):
         print(
             f"{player.playerName}{' (BANKRUPT)' if player.isBankrupt else ''}: cash ${player.cashBalance}, "
             f"net worth ${game.calculateEquity(player)}, "
-            f"strategic value ${game.calculateStrategicValue(player)}"
+            f"score ${game.calculateStrategicValue(player)} (net worth + set bonus)"
         )
         print(f"    properties: {', '.join(names)}")
 
@@ -207,7 +207,8 @@ def build_log(game, args, stopped_early):
                 "bankrupt": p.isBankrupt,
                 "properties": [game.board.getTile(i).name for i in p.ownedProperties],
                 "net_worth": game.calculateEquity(p),
-                "strategic_value": game.calculateStrategicValue(p),
+                "strategic_value": game.calculateStrategicValue(p),  # = the score
+                "set_bonus": game.calculateSetBonus(p),
             }
             for p in game.players
         },

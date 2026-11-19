@@ -6,10 +6,12 @@ from tile import PropertyTile
 from actions import EVERYONE, describe_side
 from negotiation import run_negotiation, ask_buy_decision
 
-# PLACEHOLDER for the research reward: how much extra "strategic value" a complete color
-# set is worth, as a fraction of the set's total price. calculateEquity() (cash + prices)
-# stays as the team's plain net-worth number; this one also credits set completion, which is
-# what makes trading for a set worthwhile. We will replace it with the real reward later.
+# PLACEHOLDER for the research reward: how much extra a complete color set is worth, as a
+# fraction of the set's total price. The SCORE (calculateStrategicValue) = cash + property
+# prices + this bonus for each complete set. Since 2026-11-19 the score is also the agents'
+# stated goal (LLM prompt) and decides the turn-limit winner, so goal, reward and winner match.
+# calculateEquity() (cash + prices) stays as the plain net-worth number.
+# Changing this one constant updates the score, the prompt's bonus table and the winner.
 SET_BONUS_RATE = 0.6
 
 
@@ -185,12 +187,16 @@ class GameManager:
             self._endGame(remaining[0].playerName, "bankruptcy")
 
     def finishByTurnLimit(self):
-        """The turn limit was reached: highest net worth wins; a tie is a draw (winner None)."""
+        """The turn limit was reached: highest score wins; a tie is a draw (winner None).
+
+        Score = net worth + set bonuses (calculateStrategicValue), the same number the agents
+        are told to maximize. (Before 2026-11-19 this used plain net worth.)
+        """
         if self.isGameOver():
             return
-        worths = {p.playerName: self.calculateEquity(p) for p in self.activePlayers()}
-        best = max(worths.values())
-        leaders = [name for name, worth in worths.items() if worth == best]
+        scores = {p.playerName: self.calculateStrategicValue(p) for p in self.activePlayers()}
+        best = max(scores.values())
+        leaders = [name for name, score in scores.items() if score == best]
         self._endGame(leaders[0] if len(leaders) == 1 else None, "turn_limit")
 
     def markStoppedEarly(self):
@@ -251,17 +257,31 @@ class GameManager:
             equity += self.board.getTile(propId).price
         return equity
 
+    def setBonuses(self):
+        """{"Brown": 72, ...}: the score bonus for owning every property of each group."""
+        return {group: int(SET_BONUS_RATE * sum(t.price for t in tiles))
+                for group, tiles in self.colorGroups().items()}
+
+    def _setBonusFor(self, ownedIds):
+        owned = set(ownedIds)
+        return sum(bonus for group, bonus in self.setBonuses().items()
+                   if all(t.index in owned for t in self.colorGroups()[group]))
+
     def _strategicValueFor(self, cash, ownedIds):
         owned = set(ownedIds)
-        value = cash + sum(self.board.getTile(i).price for i in owned)
-        for tiles in self.colorGroups().values():
-            if all(t.index in owned for t in tiles):
-                value += int(SET_BONUS_RATE * sum(t.price for t in tiles))
-        return value
+        return cash + sum(self.board.getTile(i).price for i in owned) + self._setBonusFor(owned)
+
+    def calculateSetBonus(self, player):
+        return self._setBonusFor(player.ownedProperties)
 
     def calculateStrategicValue(self, player):
-        """Net worth plus a bonus for each complete color set (placeholder reward)."""
+        """The SCORE: net worth plus a bonus for each complete color set (placeholder reward).
+
+        Also the agents' stated goal and the turn-limit winner's measure.
+        """
         return self._strategicValueFor(player.cashBalance, player.ownedProperties)
+
+    calculateScore = calculateStrategicValue  # same number; "score" is the name agents see
 
     def dealValueDelta(self, player, deal):
         """How much `player`'s strategic value would change if `deal` happened.

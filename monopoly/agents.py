@@ -71,18 +71,22 @@ def describe_state(game, player, opponent=None):
     ]
     if out:
         lines.append(f"Out of the game (bankrupt): {', '.join(out)}.")
+    def score_text(p):
+        return (f"score ${game.calculateStrategicValue(p)} (net worth ${game.calculateEquity(p)} "
+                f"+ set bonus ${game.calculateSetBonus(p)})")
+
     my_props = ", ".join(game.board.getTile(i).name for i in player.ownedProperties) or "none"
     lines += [
-        f"Your cash: ${player.cashBalance}. Your net worth (cash + property prices): ${game.calculateEquity(player)}.",
+        f"Your cash: ${player.cashBalance}. Your {score_text(player)}.",
         f"Properties you own: {my_props}.",
         "",
         "Opponents:",
     ]
     for p in opponents:
         props = ", ".join(game.board.getTile(i).name for i in p.ownedProperties) or "none"
-        lines.append(f"  - {p.playerName}: cash ${p.cashBalance}, net worth ${game.calculateEquity(p)}, "
-                     f"properties: {props}")
-    lines += ["", "Properties by color group:"]
+        lines.append(f"  - {p.playerName}: cash ${p.cashBalance}, {score_text(p)}, properties: {props}")
+    bonuses = game.setBonuses()
+    lines += ["", "Properties by color group (set bonus = added to the score of whoever owns the whole group):"]
     for group, tiles in game.colorGroups().items():
         counts = [f"you hold {sum(t.ownerId == me for t in tiles)}"]
         for p in opponents:
@@ -90,7 +94,7 @@ def describe_state(game, player, opponent=None):
             if held:
                 counts.append(f"{p.playerName} holds {held}")
         counts.append(f"unowned {sum(t.ownerId is None for t in tiles)}")
-        lines.append(f"{group} ({len(tiles)} properties; {', '.join(counts)}):")
+        lines.append(f"{group} ({len(tiles)} properties, set bonus ${bonuses[group]}; {', '.join(counts)}):")
         for t in tiles:
             lines.append(f"  - {t.name}: price ${t.price}, rent ${game.getRent(t)}, owner: {owner_label(t)}")
 
@@ -157,12 +161,18 @@ class LLMAgent(Agent):
         self.max_tokens = max_tokens
         self.messages = []  # the running conversation for the current decision
 
-    def _system_prompt(self, opponent_names):
+    def _system_prompt(self, opponent_names, game=None):
         persona = f"\n{self.persona}\n" if self.persona else ""
         opponents = ", ".join(opponent_names)
         ex = opponent_names[0] if opponent_names else "Agent B"  # partner name used in the examples
+        bonuses = game.setBonuses() if game else {}
+        bonus_text = ", ".join(f"{group} +${bonus}" for group, bonus in bonuses.items())
         return f"""\
-You are {self.name}, playing a simplified game of Monopoly with {len(opponent_names) + 1} players. Your opponents are: {opponents}. Your goal is to finish with the highest net worth of all players. Net worth is your cash plus the price of your properties.
+You are {self.name}, playing a simplified game of Monopoly with {len(opponent_names) + 1} players. Your opponents are: {opponents}.
+
+Your goal is to finish with the highest SCORE of all players. The player with the highest score when the game ends wins.
+Score = your cash + the price of every property you own + a set bonus for every color group in which you own ALL the properties.
+Set bonuses: {bonus_text}. A set bonus counts only while you own the whole group: selling or swapping away any property of a complete set loses its bonus.
 
 Rules of this version:
 - Players roll dice and move. Landing on an unowned property lets you buy it. Landing on someone else's property means paying them rent.
@@ -214,7 +224,7 @@ Action: [SUBMIT_DEAL] to=[{ex}] give=[] give_cash=90 get=[Mediterranean Avenue] 
 
     def _start(self, game, player, user_text):
         self.messages = [
-            {"role": "system", "content": self._system_prompt(_opponent_names(game, player))},
+            {"role": "system", "content": self._system_prompt(_opponent_names(game, player), game)},
             {"role": "user", "content": user_text},
         ]
 

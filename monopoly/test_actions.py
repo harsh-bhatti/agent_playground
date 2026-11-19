@@ -560,12 +560,17 @@ def test_bankrupt_on_doubles_does_not_roll_again_and_is_skipped():
     assert order == [B, "Agent C", B]  # A is skipped
 
 
-def test_turn_limit_winner_is_highest_net_worth():
-    game = make_game()
-    game.getPlayer(A).cashBalance += 10
+def test_turn_limit_winner_is_highest_score_not_net_worth():
+    game = GameManager([A, B])
+    give_property(game, B, "Mediterranean Avenue")
+    give_property(game, B, "Baltic Avenue")  # B owns all of Brown: set bonus $72
+    game.getPlayer(A).cashBalance += 150
+    a, b = game.getPlayer(A), game.getPlayer(B)
+    assert game.calculateEquity(a) > game.calculateEquity(b)  # A has more net worth: 1650 vs 1620
+    assert game.calculateStrategicValue(b) > game.calculateStrategicValue(a)  # B has the higher score: 1692
     with quiet():
         game.finishByTurnLimit()
-    assert game.winner == A and game.endReason == "turn_limit"
+    assert game.winner == B and game.endReason == "turn_limit"
 
 
 def test_turn_limit_tie_is_a_draw():
@@ -742,7 +747,7 @@ def test_llm_prompt_names_all_opponents():
         llm_client.chat = real
     system = sent[0][0]["content"]
     assert "with 4 players" in system and "Agent B, Agent C, Agent D" in system
-    assert "two-player" not in system and "highest net worth of all players" in system
+    assert "two-player" not in system and "highest SCORE of all players" in system
 
 
 # --------------------------------------------- choosing a partner (phase 2)
@@ -1473,6 +1478,54 @@ def test_createai_style_cut_off_gets_the_bigger_retry():
     assert completions.calls[0]["max_tokens"] == 1600 and completions.calls[1]["max_tokens"] == 3200
     assert "cut off" in result.turns[0]["retry_errors"][0]
     assert result.outcome == "deal"
+
+
+# ----------------------------------- one score: goal = reward = winner (item 2)
+def test_set_bonuses_and_score():
+    game = make_four()
+    assert game.setBonuses() == {"Brown": 72, "Railroad": 240, "Light Blue": 192}
+    give_property(game, A, "Mediterranean Avenue")  # A now owns all of Brown
+    a = game.getPlayer(A)
+    assert game.calculateSetBonus(a) == 72
+    assert game.calculateScore(a) == game.calculateStrategicValue(a) == 1500 + 120 + 72
+
+
+def test_state_and_prompt_explain_the_score():
+    from agents import describe_state
+
+    sent = []
+    real = llm_client.chat
+    llm_client.chat = lambda messages, **kw: sent.append([dict(m) for m in messages]) or reply("[PASS]")
+    try:
+        agent = LLMAgent(A)
+        game = make_four(a=agent)
+        give_property(game, A, "Mediterranean Avenue")
+        a = game.getPlayer(A)
+        state = describe_state(game, a)
+        agent.open_negotiation(game, a, game.tradePartners(a))
+    finally:
+        llm_client.chat = real
+    assert "Your score $1692 (net worth $1620 + set bonus $72)" in state
+    assert "Agent B: cash $1500, score $1700 (net worth $1700 + set bonus $0)" in state
+    assert "Brown (2 properties, set bonus $72;" in state
+    system = sent[0][0]["content"]
+    assert "Set bonuses: Brown +$72, Railroad +$240, Light Blue +$192." in system
+    assert "selling or swapping away any property of a complete set loses its bonus" in system
+    assert "net worth of all players" not in system
+
+
+def test_summary_names_the_score():
+    import main
+
+    game = make_game()
+    with quiet():
+        game.finishByTurnLimit()
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        main.print_summary(game, stopped_early=False)
+    text = out.getvalue()
+    assert "Result: draw (equal score after 0 turns)" in text
+    assert "score $1560 (net worth + set bonus)" in text
 
 
 # ------------------------------------------------ swap scenario (restored)

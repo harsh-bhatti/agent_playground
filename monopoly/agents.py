@@ -150,7 +150,7 @@ class Agent:
 
 
 class LLMAgent(Agent):
-    def __init__(self, name, persona=None, max_tokens=800):
+    def __init__(self, name, persona=None, max_tokens=llm_client.DEFAULT_MAX_TOKENS):
         super().__init__(name)
         # `persona` can be a key of PERSONAS or any text of your own.
         self.persona = PERSONAS.get(persona, persona) if persona else None

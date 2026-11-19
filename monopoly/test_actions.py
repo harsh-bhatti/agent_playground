@@ -449,7 +449,7 @@ def test_chat_adapts_when_model_rejects_options():
               _bad_request("Unsupported value: 'temperature' does not support 0.7.")]
     reply_text, calls = _with_fake_client(errors, lambda: llm_client.chat([{"role": "user", "content": "hi"}]))
     assert reply_text == "hello" and len(calls) == 3
-    assert "max_tokens" not in calls[2] and calls[2]["max_completion_tokens"] == 800
+    assert "max_tokens" not in calls[2] and calls[2]["max_completion_tokens"] == llm_client.DEFAULT_MAX_TOKENS
     assert "temperature" not in calls[2]
 
 
@@ -1448,6 +1448,31 @@ def test_per_player_stats_count_cut_off_replies():
     stats = main.per_player_stats(game)
     assert stats[A]["cut_off_replies"] == 1 and stats[A]["prompt_tokens"] == 200
     assert stats[B]["cut_off_replies"] == 0 and stats[B]["prompt_tokens"] == 0
+
+
+def test_reply_that_used_its_whole_limit_counts_as_cut_off():
+    """ASU CreateAI reports finish_reason "stop" even when the token limit was reached."""
+    def go():
+        llm_client.cut_off_replies = 0
+        llm_client.chat([{"role": "user", "content": "hi"}], max_tokens=800)
+        return llm_client.last_finish_reason, llm_client.last_reported_finish_reason, llm_client.cut_off_replies
+
+    result, _ = _run_with_completions(_SeqCompletions([("", "stop")], completion_tokens=800), go)
+    assert result == ("length", "stop", 1)
+    result, _ = _run_with_completions(_SeqCompletions([("ok", "stop")], completion_tokens=799), go)
+    assert result == ("stop", "stop", 0)  # one token short of the limit is a normal reply
+
+
+def test_createai_style_cut_off_gets_the_bigger_retry():
+    agent = LLMAgent(A)  # default reply limit
+    game = make_game(agent, ScriptedAgent(B, respond=[reply("[ACCEPT_DEAL]")]))
+    limit = llm_client.DEFAULT_MAX_TOKENS
+    completions = _SeqCompletions([("", "stop"), (reply(OFFER), "stop")], completion_tokens=limit)
+    result, completions = _run_with_completions(completions, lambda: run(game))
+    assert limit == 1600 and agent.max_tokens == 1600
+    assert completions.calls[0]["max_tokens"] == 1600 and completions.calls[1]["max_tokens"] == 3200
+    assert "cut off" in result.turns[0]["retry_errors"][0]
+    assert result.outcome == "deal"
 
 
 # ------------------------------------------------ swap scenario (restored)

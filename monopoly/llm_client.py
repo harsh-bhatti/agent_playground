@@ -42,8 +42,12 @@ total_calls = 0
 total_prompt_tokens = 0  # tokens sent to the model (system prompt, state, conversation)
 total_completion_tokens = 0  # tokens the model produced (may include hidden reasoning)
 empty_replies = 0  # replies with no text at all
-cut_off_replies = 0  # replies stopped by the reply-length limit (finish_reason "length")
-last_finish_reason = None  # why the most recent reply ended ("stop", "length", ...); None if unknown
+cut_off_replies = 0  # replies stopped by the reply-length limit (see last_finish_reason)
+# Why the most recent reply ended ("stop", "length", ...); None if unknown. Set to "length"
+# whenever the reply used its whole token limit: ASU CreateAI reports "stop" even then
+# (seen in live runs), so the reported reason alone cannot be trusted.
+last_finish_reason = None
+last_reported_finish_reason = None  # exactly what the provider said
 
 # Options a model rejected once; remembered so later calls do not repeat the failed request.
 _use_max_completion_tokens = False
@@ -60,16 +64,19 @@ def _get_client():
     return _client
 
 
-def chat(messages, max_tokens=800, temperature=None):
+DEFAULT_MAX_TOKENS = 1600  # 800 was too little: hidden reasoning used it all up (live runs)
+
+
+def chat(messages, max_tokens=DEFAULT_MAX_TOKENS, temperature=None):
     """Send a list of {"role": ..., "content": ...} messages. Returns the reply text.
 
     Returns "" if the model sends back nothing (this can happen if its thinking used up
     max_tokens). Counts tokens so you can watch your budget, and sets last_finish_reason.
     """
     global total_tokens_used, total_calls, total_prompt_tokens, total_completion_tokens
-    global empty_replies, cut_off_replies, last_finish_reason
+    global empty_replies, cut_off_replies, last_finish_reason, last_reported_finish_reason
     global _use_max_completion_tokens, _skip_temperature
-    last_finish_reason = None
+    last_finish_reason = last_reported_finish_reason = None
     kwargs = dict(model=MODEL, messages=messages)
     kwargs["max_completion_tokens" if _use_max_completion_tokens else "max_tokens"] = max_tokens
     if not _skip_temperature:
@@ -103,14 +110,18 @@ def chat(messages, max_tokens=800, temperature=None):
 
         total_calls += 1
         usage = response.usage
+        produced = 0
         if usage:
+            produced = getattr(usage, "completion_tokens", 0) or 0
             total_tokens_used += usage.total_tokens or 0
             total_prompt_tokens += getattr(usage, "prompt_tokens", 0) or 0
-            total_completion_tokens += getattr(usage, "completion_tokens", 0) or 0
+            total_completion_tokens += produced
         choice = response.choices[0]
-        last_finish_reason = choice.finish_reason
+        last_reported_finish_reason = choice.finish_reason
+        hit_limit = produced >= max_tokens
+        last_finish_reason = "length" if hit_limit else choice.finish_reason
         content = choice.message.content or ""
-        if choice.finish_reason == "length":
+        if last_finish_reason == "length":
             cut_off_replies += 1
             print("  [LLM] Reply was cut off by the reply-length limit (thinking may have used it up).")
         if not content.strip():

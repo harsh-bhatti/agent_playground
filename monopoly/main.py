@@ -50,7 +50,7 @@ def build_agents(args, names):
             agents[name] = RuleBasedAgent(name, propose=False)
         else:
             agents[name] = LLMAgent(name, persona=personas.get(name),
-                                    max_tokens=getattr(args, "max_reply_tokens", 800))
+                                    max_tokens=getattr(args, "max_reply_tokens", llm_client.DEFAULT_MAX_TOKENS))
     return agents
 
 
@@ -237,9 +237,10 @@ def main():
     parser.add_argument("--max-calls-per-turn", type=int, default=12,
                         help="most agent calls per dice roll, retries included (0 = no limit). "
                              "When it runs out the agent is not asked and the safe default is used")
-    parser.add_argument("--max-reply-tokens", type=int, default=800,
+    parser.add_argument("--max-reply-tokens", type=int, default=llm_client.DEFAULT_MAX_TOKENS,
                         help="most tokens one model reply may use, hidden thinking included "
-                             "(default 800; a retry after a cut-off reply gets twice this)")
+                             f"(default {llm_client.DEFAULT_MAX_TOKENS}; a retry after a cut-off "
+                             "reply gets twice this)")
     parser.add_argument("--seed", type=int, default=None, help="fix the dice for repeatable games")
     parser.add_argument("--show-thoughts", action="store_true", help="print each agent's private Thought")
     parser.add_argument("--persona-a", choices=list(PERSONAS), default=None)

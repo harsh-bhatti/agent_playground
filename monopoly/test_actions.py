@@ -400,18 +400,48 @@ def _bad_request(text):
     return BadRequestError(text, response=response, body=None)
 
 
-def _with_fake_client(errors, func):
+def _run_with_completions(completions, func):
+    """Run func with llm_client talking to a fake `completions` object; restore everything after."""
     import types
 
-    completions = _FakeCompletions(errors)
-    real_client = llm_client._client
+    saved = {k: getattr(llm_client, k) for k in (
+        "_client", "_use_max_completion_tokens", "_skip_temperature", "total_calls", "total_tokens_used",
+        "total_prompt_tokens", "total_completion_tokens", "empty_replies", "cut_off_replies")}
     llm_client._client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=completions))
+    llm_client._use_max_completion_tokens = llm_client._skip_temperature = False
     try:
         with quiet():
             result = func()
     finally:
-        llm_client._client = real_client
+        for k, v in saved.items():
+            setattr(llm_client, k, v)
+    return result, completions
+
+
+def _with_fake_client(errors, func):
+    result, completions = _run_with_completions(_FakeCompletions(errors), func)
     return result, completions.calls
+
+
+class _SeqCompletions:
+    """Fake client.chat.completions that returns (content, finish_reason) pairs in order."""
+
+    def __init__(self, replies, prompt_tokens=100, completion_tokens=50):
+        self.replies = list(replies)
+        self.calls = []
+        self.usage = (prompt_tokens, completion_tokens)
+
+    def create(self, **kwargs):
+        import types
+
+        self.calls.append(dict(kwargs))
+        content, finish = self.replies.pop(0)
+        message = types.SimpleNamespace(content=content)
+        p, c = self.usage
+        return types.SimpleNamespace(
+            choices=[types.SimpleNamespace(message=message, finish_reason=finish)],
+            usage=types.SimpleNamespace(total_tokens=p + c, prompt_tokens=p, completion_tokens=c),
+        )
 
 
 def test_chat_adapts_when_model_rejects_options():
@@ -1357,6 +1387,67 @@ def test_state_lists_your_own_properties():
     game = make_four()
     assert "Properties you own: Baltic Avenue." in describe_state(game, game.getPlayer(A))
     assert "Properties you own: none." in describe_state(game, game.getPlayer(D))
+
+
+# ------------------------------------ live-run fixes: empty / cut-off replies
+def test_chat_counts_tokens_empty_and_cut_off_replies():
+    def go():
+        text = llm_client.chat([{"role": "user", "content": "hi"}])
+        return (text, llm_client.last_finish_reason, llm_client.empty_replies, llm_client.cut_off_replies,
+                llm_client.total_prompt_tokens, llm_client.total_completion_tokens)
+
+    llm_client.empty_replies = llm_client.cut_off_replies = 0
+    llm_client.total_prompt_tokens = llm_client.total_completion_tokens = 0
+    (text, finish, empty, cut, sent, produced), _ = _run_with_completions(
+        _SeqCompletions([("", "length")], prompt_tokens=1200, completion_tokens=800), go)
+    assert (text, finish, empty, cut, sent, produced) == ("", "length", 1, 1, 1200, 800)
+
+
+def test_chat_remembers_options_the_model_rejected():
+    def go():
+        llm_client.chat([{"role": "user", "content": "hi"}])
+        return llm_client.chat([{"role": "user", "content": "again"}])
+
+    errors = [_bad_request("Unsupported parameter: 'max_tokens'."), _bad_request("'temperature' unsupported")]
+    _, calls = _with_fake_client(errors, go)
+    assert len(calls) == 4  # 2 rejected + 2 successful; the second chat() needed no retry
+    assert "max_completion_tokens" in calls[3] and "max_tokens" not in calls[3]
+    assert "temperature" not in calls[3]
+
+
+def test_empty_reply_gets_an_honest_error():
+    a = ScriptedAgent(A, open=[""], correct=[reply(OFFER)])
+    b = ScriptedAgent(B, respond=[reply("[ACCEPT_DEAL]")])
+    result = run(make_game(a, b))
+    assert a.errors[0].startswith("Your reply was empty.")
+    assert result.outcome == "deal" and result.turns[0]["attempts"] == 2
+    assert result.turns[0]["finish_reasons"] == [None, None]  # scripted agents use no model
+
+
+def test_cut_off_reply_is_explained_and_retried_with_more_room():
+    agent = LLMAgent(A, max_tokens=800)
+    game = make_game(agent, ScriptedAgent(B, respond=[reply("[ACCEPT_DEAL]")]))
+    completions = _SeqCompletions([("", "length"), (reply(OFFER), "stop")])
+    result, completions = _run_with_completions(completions, lambda: run(game))
+    turn = result.turns[0]
+    assert turn["finish_reasons"] == ["length", "stop"]
+    assert "cut off" in turn["retry_errors"][0]
+    assert completions.calls[0]["max_tokens"] == 800 and completions.calls[1]["max_tokens"] == 1600
+    assert (turn["prompt_tokens"], turn["completion_tokens"]) == (200, 100)
+    assert result.outcome == "deal"
+
+
+def test_per_player_stats_count_cut_off_replies():
+    import main
+
+    agent = LLMAgent(A, max_tokens=800)
+    game = make_game(agent, ScriptedAgent(B, respond=[reply("[ACCEPT_DEAL]")]))
+    completions = _SeqCompletions([("", "length"), (reply(OFFER), "stop")])
+    result, _ = _run_with_completions(completions, lambda: run(game))
+    game.negotiationResults.append(result)
+    stats = main.per_player_stats(game)
+    assert stats[A]["cut_off_replies"] == 1 and stats[A]["prompt_tokens"] == 200
+    assert stats[B]["cut_off_replies"] == 0 and stats[B]["prompt_tokens"] == 0
 
 
 # ------------------------------------------------------------------ runner

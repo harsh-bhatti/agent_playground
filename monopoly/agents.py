@@ -207,8 +207,8 @@ Thought: Mediterranean Avenue would complete my Brown set, so I will pay a premi
 Talk: I'd like Mediterranean Avenue. I'll give you $90 for it.
 Action: [SUBMIT_DEAL] to=[{ex}] give=[] give_cash=90 get=[Mediterranean Avenue] get_cash=0"""
 
-    def _call(self):
-        reply = llm_client.chat(self.messages, max_tokens=self.max_tokens)
+    def _call(self, max_tokens=None):
+        reply = llm_client.chat(self.messages, max_tokens=max_tokens or self.max_tokens)
         self.messages.append({"role": "assistant", "content": reply or "(empty reply)"})
         return reply
 
@@ -284,6 +284,8 @@ Action: [SUBMIT_DEAL] to=[{ex}] give=[] give_cash=90 get=[Mediterranean Avenue] 
         return self._call()
 
     def correct(self, error):
+        # If the last reply ran out of room (often hidden thinking), give the retry twice as much.
+        cut_off = llm_client.last_finish_reason == "length"
         self.messages.append(
             {
                 "role": "user",
@@ -291,7 +293,7 @@ Action: [SUBMIT_DEAL] to=[{ex}] give=[] give_cash=90 get=[Mediterranean Avenue] 
                 "Reply again using the Thought / Talk / Action format.",
             }
         )
-        return self._call()
+        return self._call(self.max_tokens * 2 if cut_off else None)
 
     def end_conversation(self):
         self.messages = []

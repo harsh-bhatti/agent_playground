@@ -47,7 +47,8 @@ def build_agents(args, names):
         elif args.mode == "llm-vs-rule" and name != "Agent A":
             agents[name] = RuleBasedAgent(name, propose=False)
         else:
-            agents[name] = LLMAgent(name, persona=personas.get(name))
+            agents[name] = LLMAgent(name, persona=personas.get(name),
+                                    max_tokens=getattr(args, "max_reply_tokens", 800))
     return agents
 
 
@@ -89,6 +90,9 @@ def per_player_stats(game):
             "capped": 0,
             "fallbacks": 0,
             "tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cut_off_replies": 0,
             "bankrupt": p.isBankrupt,
             "final_net_worth": game.calculateEquity(p),
         }
@@ -115,6 +119,9 @@ def per_player_stats(game):
         s["capped"] += bool(turn.get("capped"))
         s["fallbacks"] += bool(turn["fell_back"])
         s["tokens"] += turn["tokens"]
+        s["prompt_tokens"] += turn.get("prompt_tokens", 0)
+        s["completion_tokens"] += turn.get("completion_tokens", 0)
+        s["cut_off_replies"] += sum(1 for r in turn.get("finish_reasons", []) if r == "length")
     return stats
 
 
@@ -169,7 +176,10 @@ def print_summary(game, stopped_early):
     print(f"Deals executed: {len(deals)}")
     print_player_table(per_player_stats(game))
     if llm_client.total_calls:
-        print(f"LLM calls: {llm_client.total_calls}   tokens used: {llm_client.total_tokens_used}")
+        print(f"LLM calls: {llm_client.total_calls}   tokens used: {llm_client.total_tokens_used} "
+              f"(sent {llm_client.total_prompt_tokens}, replies {llm_client.total_completion_tokens})   "
+              f"empty replies: {llm_client.empty_replies}   cut off by the reply limit: "
+              f"{llm_client.cut_off_replies}")
 
 
 def build_log(game, args, stopped_early):
@@ -180,7 +190,11 @@ def build_log(game, args, stopped_early):
         "turns_played": game.turnCount,
         **game.gameResult(),  # winner, end_reason, bankruptcies
         "tokens_used": llm_client.total_tokens_used,
+        "prompt_tokens": llm_client.total_prompt_tokens,
+        "completion_tokens": llm_client.total_completion_tokens,
         "llm_calls": llm_client.total_calls,
+        "empty_replies": llm_client.empty_replies,
+        "cut_off_replies": llm_client.cut_off_replies,
         "buy_decisions": game.decisionLog,
         "negotiations": [r.to_dict() for r in game.negotiationResults],
         "events": game.events,
@@ -218,6 +232,9 @@ def main():
     parser.add_argument("--max-calls-per-turn", type=int, default=12,
                         help="most agent calls per dice roll, retries included (0 = no limit). "
                              "When it runs out the agent is not asked and the safe default is used")
+    parser.add_argument("--max-reply-tokens", type=int, default=800,
+                        help="most tokens one model reply may use, hidden thinking included "
+                             "(default 800; a retry after a cut-off reply gets twice this)")
     parser.add_argument("--seed", type=int, default=None, help="fix the dice for repeatable games")
     parser.add_argument("--show-thoughts", action="store_true", help="print each agent's private Thought")
     parser.add_argument("--persona-a", choices=list(PERSONAS), default=None)
@@ -227,6 +244,8 @@ def main():
         parser.error(f"--players must be between 2 and {MAX_PLAYERS}")
     if args.max_calls_per_turn < 0:
         parser.error("--max-calls-per-turn must be 0 (no limit) or more")
+    if args.max_reply_tokens < 50:
+        parser.error("--max-reply-tokens must be at least 50")
 
     if args.mode != "mock" and not os.getenv(llm_client.API_KEY_ENV):
         print(f"{llm_client.API_KEY_ENV} is not set. Add it to your .env file, or run with --mode mock.")

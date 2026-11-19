@@ -28,6 +28,7 @@ from actions import (
     IDEA_REPLY_ACTIONS,
     OPEN_ACTIONS,
     RESPOND_ACTIONS,
+    ParsedAction,
     describe_side,
     parse_action,
     parse_reply,
@@ -69,9 +70,22 @@ class Turn:
     retry_errors: list = field(default_factory=list)  # why each earlier attempt was rejected
     first_reply: str | None = None  # the model's first reply, kept only if it had to be retried
     capped: bool = False  # True if the per-turn call budget stopped a call (attempts=0: never asked)
+    finish_reasons: list = field(default_factory=list)  # per attempt: "stop", "length", ... (None = no model)
+    prompt_tokens: int = 0  # tokens sent to the model for this decision
+    completion_tokens: int = 0  # tokens the model produced for this decision
 
     def to_dict(self):
         return asdict(self)
+
+
+def _empty_reply_error(finish_reason, allowed):
+    """The message an agent gets back when its reply had no text."""
+    if finish_reason == "length":
+        return ("Your reply was cut off before you wrote anything: it ran out of room, probably while "
+                "thinking. Think briefly, then write Thought (one short sentence), Talk, and "
+                "'Action: [TAG]'. Allowed tags: " + ", ".join(f"[{a}]" for a in allowed) + ".")
+    return ("Your reply was empty. Reply with Thought, Talk, then 'Action: [TAG]'. Allowed tags: "
+            + ", ".join(f"[{a}]" for a in allowed) + ".")
 
 
 @dataclass
@@ -141,7 +155,18 @@ def get_valid_action(game, agent, speaker, listener, decision, first_call,
             error="The call budget for this turn is used up, so the agent was not asked.",
         )
 
-    reply = first_call()
+    prompt_before = llm_client.total_prompt_tokens
+    completion_before = llm_client.total_completion_tokens
+    finish_reasons = []
+
+    def ask(call):
+        """Run one agent call and note why the model's reply ended (None if no model was used)."""
+        calls_before = llm_client.total_calls
+        text = call()
+        finish_reasons.append(llm_client.last_finish_reason if llm_client.total_calls > calls_before else None)
+        return text
+
+    reply = ask(first_call)
     attempts = 0
     first_format_ok = None
     first_reply = reply
@@ -150,7 +175,10 @@ def get_valid_action(game, agent, speaker, listener, decision, first_call,
     while True:
         attempts += 1
         parsed = parse_reply(reply, need_talk)
-        act = parse_action(parsed, allowed, game.board)
+        if not (reply or "").strip():
+            act = ParsedAction(error=_empty_reply_error(finish_reasons[-1], allowed))
+        else:
+            act = parse_action(parsed, allowed, game.board)
         target = None
         if act.error is None:
             if decision == "choose" and act.kind in ("ACCEPT_DEAL", "SUBMIT_DEAL"):
@@ -175,7 +203,7 @@ def get_valid_action(game, agent, speaker, listener, decision, first_call,
             capped = True  # invalid reply, but no budget left for the retry
             break
         retry_errors.append(act.error)
-        reply = agent.correct(act.error)
+        reply = ask(lambda: agent.correct(act.error))
 
     fell_back = act.error is not None
     kind = FALLBACK[decision] if fell_back else act.kind
@@ -198,6 +226,9 @@ def get_valid_action(game, agent, speaker, listener, decision, first_call,
         retry_errors=retry_errors,
         first_reply=(first_reply or "")[:800] if retry_errors else None,
         capped=capped,
+        finish_reasons=finish_reasons,
+        prompt_tokens=llm_client.total_prompt_tokens - prompt_before,
+        completion_tokens=llm_client.total_completion_tokens - completion_before,
     )
 
 

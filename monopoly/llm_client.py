@@ -39,6 +39,15 @@ class DailyLimitError(LLMError):
 _client = None
 total_tokens_used = 0
 total_calls = 0
+total_prompt_tokens = 0  # tokens sent to the model (system prompt, state, conversation)
+total_completion_tokens = 0  # tokens the model produced (may include hidden reasoning)
+empty_replies = 0  # replies with no text at all
+cut_off_replies = 0  # replies stopped by the reply-length limit (finish_reason "length")
+last_finish_reason = None  # why the most recent reply ended ("stop", "length", ...); None if unknown
+
+# Options a model rejected once; remembered so later calls do not repeat the failed request.
+_use_max_completion_tokens = False
+_skip_temperature = False
 
 
 def _get_client():
@@ -55,15 +64,16 @@ def chat(messages, max_tokens=800, temperature=None):
     """Send a list of {"role": ..., "content": ...} messages. Returns the reply text.
 
     Returns "" if the model sends back nothing (this can happen if its thinking used up
-    max_tokens). Counts tokens in total_tokens_used so you can watch your daily budget.
+    max_tokens). Counts tokens so you can watch your budget, and sets last_finish_reason.
     """
-    global total_tokens_used, total_calls
-    kwargs = dict(
-        model=MODEL,
-        messages=messages,
-        max_tokens=max_tokens,
-        temperature=TEMPERATURE if temperature is None else temperature,
-    )
+    global total_tokens_used, total_calls, total_prompt_tokens, total_completion_tokens
+    global empty_replies, cut_off_replies, last_finish_reason
+    global _use_max_completion_tokens, _skip_temperature
+    last_finish_reason = None
+    kwargs = dict(model=MODEL, messages=messages)
+    kwargs["max_completion_tokens" if _use_max_completion_tokens else "max_tokens"] = max_tokens
+    if not _skip_temperature:
+        kwargs["temperature"] = TEMPERATURE if temperature is None else temperature
     for attempt in range(MAX_ATTEMPTS):
         try:
             response = _get_client().chat.completions.create(**kwargs)
@@ -82,20 +92,30 @@ def chat(messages, max_tokens=800, temperature=None):
             if "max_tokens" in text and "max_tokens" in kwargs:
                 print("  [LLM] This model wants max_completion_tokens instead of max_tokens; retrying.")
                 kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
+                _use_max_completion_tokens = True
                 continue
             if "temperature" in text and "temperature" in kwargs:
                 print("  [LLM] This model rejected the temperature setting; retrying with its default.")
                 kwargs.pop("temperature")
+                _skip_temperature = True
                 continue
             raise LLMError(f"The model rejected the request: {error}") from error
 
         total_calls += 1
-        if response.usage:
-            total_tokens_used += response.usage.total_tokens
+        usage = response.usage
+        if usage:
+            total_tokens_used += usage.total_tokens or 0
+            total_prompt_tokens += getattr(usage, "prompt_tokens", 0) or 0
+            total_completion_tokens += getattr(usage, "completion_tokens", 0) or 0
         choice = response.choices[0]
+        last_finish_reason = choice.finish_reason
+        content = choice.message.content or ""
         if choice.finish_reason == "length":
-            print("  [LLM] Reply was cut off by max_tokens (thinking may have used them up).")
-        return choice.message.content or ""
+            cut_off_replies += 1
+            print("  [LLM] Reply was cut off by the reply-length limit (thinking may have used it up).")
+        if not content.strip():
+            empty_replies += 1
+        return content
 
     raise LLMError(f"The model request failed after {MAX_ATTEMPTS} attempts.")
 

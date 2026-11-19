@@ -598,6 +598,155 @@ def test_full_mock_games_end_with_a_consistent_result():
     assert bankrupt_games >= 5, f"only {bankrupt_games} of 20 games had a bankruptcy"
 
 
+# ----------------------------------------------------- N-player (phase 1)
+C, D = "Agent C", "Agent D"
+FOUR = [A, B, C, D]
+
+
+def turn_order(game, turns):
+    """Play `turns` turns (no doubles, 2 steps each) and return who rolled each time."""
+    game.rollDice = lambda: (2, False)
+    order = []
+    with quiet():
+        for _ in range(turns):
+            order.append(game.players[game.activePlayerIndex].playerName)
+            game.executeTurn()
+    return order
+
+
+def test_player_names_and_agents_for_four_players():
+    import argparse
+    import main
+
+    names = main.player_names(4)
+    assert names == FOUR
+    args = argparse.Namespace(mode="mock", persona_a=None, persona_b=None)
+    agents = main.build_agents(args, names)
+    assert list(agents) == FOUR and all(isinstance(a, RuleBasedAgent) for a in agents.values())
+    args.mode = "llm-vs-rule"  # builds objects only; nothing calls the model
+    agents = main.build_agents(args, names)
+    assert isinstance(agents[A], LLMAgent)
+    assert all(isinstance(agents[n], RuleBasedAgent) and not agents[n].propose for n in (B, C, D))
+
+
+def test_four_player_turn_order():
+    assert turn_order(GameManager(FOUR), 5) == [A, B, C, D, A]
+
+
+def test_four_player_bankrupt_player_is_skipped():
+    game = GameManager(FOUR)
+    with quiet():
+        game.declareBankruptcy(game.getPlayer(B), 100, None, "test")
+    assert not game.isGameOver()
+    assert turn_order(game, 4) == [A, C, D, A]
+
+
+def test_four_player_bankruptcy_pays_the_right_creditor():
+    game = GameManager(FOUR)
+    give_property(game, C, "Mediterranean Avenue")
+    give_property(game, A, "Baltic Avenue")
+    game.getPlayer(A).cashBalance = 1  # rent is $2
+    a = land_on(game, A, tile_id("Mediterranean Avenue"))
+    c = game.getPlayer(C)
+    assert a.isBankrupt and c.cashBalance == 1501 and tile_id("Baltic Avenue") in c.ownedProperties
+    assert game.getPlayer(B).cashBalance == 1500 and game.getPlayer(D).cashBalance == 1500
+    assert not game.isGameOver()  # three players are still in
+    check_invariants(game)
+
+
+def test_four_player_last_player_standing():
+    game = GameManager(FOUR)
+    with quiet():
+        for name in (A, C):
+            game.declareBankruptcy(game.getPlayer(name), 100, None, "test")
+        assert not game.isGameOver()
+        game.declareBankruptcy(game.getPlayer(D), 100, B, "rent")
+    assert game.isGameOver() and game.winner == B and game.endReason == "bankruptcy"
+    assert [b["player"] for b in game.bankruptcies] == [A, C, D]
+
+
+def test_four_player_buy_decision_uses_the_agent():
+    agent = ScriptedAgent(A, buy=[reply("[BUY]")])
+    game = GameManager(FOUR, agents={A: agent})
+    a = land_on(game, A, tile_id("Vermont Avenue"))
+    assert tile_id("Vermont Avenue") in a.ownedProperties and a.cashBalance == 1400
+    assert game.decisionLog[0]["kind"] == "BUY"
+
+
+def test_describe_state_lists_every_opponent():
+    from agents import describe_state
+
+    game = GameManager(FOUR)
+    give_property(game, C, "Reading Railroad")
+    with quiet():
+        game.declareBankruptcy(game.getPlayer(D), 100, None, "test")
+    text = describe_state(game, game.getPlayer(A))
+    assert "Your opponents: Agent B, Agent C." in text
+    assert "Out of the game (bankrupt): Agent D." in text
+    assert "Agent C: cash $1500" in text and "properties: Reading Railroad" in text
+    assert "Agent C holds 1" in text and "owner: Agent C" in text
+    assert "Agent D: cash" not in text  # bankrupt players are not listed as opponents
+
+
+def test_llm_prompt_names_all_opponents():
+    sent = []
+    real = llm_client.chat
+    llm_client.chat = lambda messages, **kw: sent.append([dict(m) for m in messages]) or reply("[PASS]")
+    try:
+        agent = LLMAgent(A)
+        game = GameManager(FOUR, agents={A: agent})
+        agent.decide_buy(game, game.getPlayer(A), game.board.getTile(tile_id("Vermont Avenue")))
+    finally:
+        llm_client.chat = real
+    system = sent[0][0]["content"]
+    assert "with 4 players" in system and "Agent B, Agent C, Agent D" in system
+    assert "two-player" not in system and "highest net worth of all players" in system
+
+
+def test_four_player_games_have_no_negotiation_yet():
+    game = GameManager(FOUR, agents={n: RuleBasedAgent(n) for n in FOUR})
+    random.seed(3)
+    with quiet():
+        for _ in range(40):
+            game.executeTurn()
+    assert game.negotiationResults == []  # comes in phase 2 (choosing a partner)
+
+
+def test_four_player_mock_games_keep_ownership_consistent():
+    for seed in range(10):
+        random.seed(seed)
+        game = GameManager(FOUR, agents={n: RuleBasedAgent(n) for n in FOUR})
+        with quiet():
+            for _ in range(150):
+                game.executeTurn()
+                check_invariants(game)
+
+
+def test_four_player_low_cash_games_end_consistently():
+    eliminated = 0
+    for seed in range(20):
+        random.seed(seed)
+        game = GameManager(FOUR, agents={n: RuleBasedAgent(n) for n in FOUR})
+        for p in game.players:
+            p.cashBalance = 150
+        with quiet():
+            for _ in range(300):
+                game.executeTurn()
+                check_invariants(game)
+                if game.isGameOver():
+                    break
+            game.finishByTurnLimit()
+        survivors = game.activePlayers()
+        assert len(game.bankruptcies) == 4 - len(survivors)
+        eliminated += len(game.bankruptcies)
+        if game.endReason == "bankruptcy":
+            assert len(survivors) == 1 and survivors[0].playerName == game.winner
+        else:
+            assert game.endReason == "turn_limit" and len(survivors) >= 2
+            assert game.winner is None or game.winner in [p.playerName for p in survivors]
+    assert eliminated >= 5, f"only {eliminated} eliminations in 20 games"
+
+
 # ------------------------------------------------------------------ runner
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]

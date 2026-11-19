@@ -142,11 +142,11 @@ def _print_turn(game, turn):
 # ---------------------------------------------------------------------------
 def ask_buy_decision(game, agent, player, tile):
     """Ask the agent whether to buy the property it landed on. Returns True to buy."""
-    opponent = next(p for p in game.players if p.playerName != player.playerName)
     print(f"  -> [DECISION] {player.playerName} considers {tile.name} (${tile.price}).")
     try:
+        # listener=None: a buy decision involves no other player ([BUY]/[PASS] only).
         turn = get_valid_action(
-            game, agent, player, opponent, "buy", lambda: agent.decide_buy(game, player, tile)
+            game, agent, player, None, "buy", lambda: agent.decide_buy(game, player, tile)
         )
     finally:
         agent.end_conversation()

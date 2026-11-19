@@ -35,40 +35,55 @@ def _reply(thought, talk, action):
     return f"Thought: {thought}\nTalk: {talk}\nAction: {action}"
 
 
-def _opponent_of(game, player):
-    return next(p for p in game.players if p.playerName != player.playerName)
+def _opponent_names(game, player):
+    """Names of the other players still in the game, in turn order."""
+    return [p.playerName for p in game.activePlayers() if p.playerName != player.playerName]
 
 
 # ---------------------------------------------------------------------------
 # Turning the game into text a model can read
 # ---------------------------------------------------------------------------
-def describe_state(game, player, opponent):
+def describe_state(game, player, opponent=None):
     """A compact, plain-English summary of the game from one player's point of view.
 
-    It states the facts models tend to get wrong (like who holds how much of each color set)
-    instead of making the model work them out from raw JSON.
+    Shows every opponent (all information is public, as in real Monopoly). It states the
+    facts models tend to get wrong (like who holds how much of each color set) instead of
+    making the model work them out from raw JSON.
+
+    `opponent` is no longer used; it is kept so older calls with three arguments still work.
     """
-    me, opp = player.playerName, opponent.playerName
+    me = player.playerName
+    opponents = [p for p in game.activePlayers() if p.playerName != me]
+    out = [p.playerName for p in game.players if p.isBankrupt]
 
     def owner_label(tile):
         if tile.ownerId is None:
             return "bank (unowned)"
-        return "you" if tile.ownerId == me else opp
+        return "you" if tile.ownerId == me else tile.ownerId
 
     lines = [
-        f"Turn {game.turnCount}. You are {me}; your opponent is {opp}.",
-        f"Your cash: ${player.cashBalance}. Your net worth (cash + property prices): ${game.calculateEquity(player)}.",
-        f"{opp}'s cash: ${opponent.cashBalance}. Net worth: ${game.calculateEquity(opponent)}.",
-        "",
-        "Properties by color group:",
+        f"Turn {game.turnCount}. You are {me}. Your opponents: {', '.join(p.playerName for p in opponents) or 'none'}.",
     ]
+    if out:
+        lines.append(f"Out of the game (bankrupt): {', '.join(out)}.")
+    lines += [
+        f"Your cash: ${player.cashBalance}. Your net worth (cash + property prices): ${game.calculateEquity(player)}.",
+        "",
+        "Opponents:",
+    ]
+    for p in opponents:
+        props = ", ".join(game.board.getTile(i).name for i in p.ownedProperties) or "none"
+        lines.append(f"  - {p.playerName}: cash ${p.cashBalance}, net worth ${game.calculateEquity(p)}, "
+                     f"properties: {props}")
+    lines += ["", "Properties by color group:"]
     for group, tiles in game.colorGroups().items():
-        mine = sum(t.ownerId == me for t in tiles)
-        theirs = sum(t.ownerId == opp for t in tiles)
-        bank = len(tiles) - mine - theirs
-        lines.append(
-            f"{group} ({len(tiles)} properties; you hold {mine}, {opp} holds {theirs}, unowned {bank}):"
-        )
+        counts = [f"you hold {sum(t.ownerId == me for t in tiles)}"]
+        for p in opponents:
+            held = sum(t.ownerId == p.playerName for t in tiles)
+            if held:
+                counts.append(f"{p.playerName} holds {held}")
+        counts.append(f"unowned {sum(t.ownerId is None for t in tiles)}")
+        lines.append(f"{group} ({len(tiles)} properties; {', '.join(counts)}):")
         for t in tiles:
             lines.append(f"  - {t.name}: price ${t.price}, rent ${game.getRent(t)}, owner: {owner_label(t)}")
 
@@ -113,16 +128,18 @@ class LLMAgent(Agent):
         self.max_tokens = max_tokens
         self.messages = []  # the running conversation for the current decision
 
-    def _system_prompt(self, opponent_name):
+    def _system_prompt(self, opponent_names):
         persona = f"\n{self.persona}\n" if self.persona else ""
+        opponents = ", ".join(opponent_names)
         return f"""\
-You are {self.name}, playing a simplified two-player game of Monopoly against {opponent_name}. Your goal is to finish with a higher net worth than {opponent_name}. Net worth is your cash plus the price of your properties.
+You are {self.name}, playing a simplified game of Monopoly with {len(opponent_names) + 1} players. Your opponents are: {opponents}. Your goal is to finish with the highest net worth of all players. Net worth is your cash plus the price of your properties.
 
 Rules of this version:
 - Players roll dice and move. Landing on an unowned property lets you buy it. Landing on someone else's property means paying them rent.
-- The ONLY ways to get a property are buying it right after you land on it, or trading with the other player. You cannot buy an unowned property just by choosing to.
+- The ONLY ways to get a property are buying it right after you land on it, or trading with another player. You cannot buy an unowned property just by choosing to.
 - Owning EVERY property of a color group doubles the rent on those properties. Railroad rent grows with how many railroads the owner holds.
 - Players may trade properties and cash. A trade only happens if both players agree, and each side must really own what it gives.
+- A player who cannot pay rent or tax is bankrupt and out of the game.
 {persona}
 Reply format (always in this order):
 
@@ -159,19 +176,19 @@ Action: [SUBMIT_DEAL] give=[] give_cash=90 get=[Mediterranean Avenue] get_cash=0
         self.messages.append({"role": "assistant", "content": reply or "(empty reply)"})
         return reply
 
-    def _start(self, opponent, user_text):
+    def _start(self, game, player, user_text):
         self.messages = [
-            {"role": "system", "content": self._system_prompt(opponent.playerName)},
+            {"role": "system", "content": self._system_prompt(_opponent_names(game, player))},
             {"role": "user", "content": user_text},
         ]
 
     def decide_buy(self, game, player, tile):
-        opponent = _opponent_of(game, player)
         group = game.colorGroups()[tile.colorGroup]
         held = sum(t.ownerId == player.playerName for t in group)
         self._start(
-            opponent,
-            f"{describe_state(game, player, opponent)}\n\n"
+            game,
+            player,
+            f"{describe_state(game, player)}\n\n"
             f"You landed on {tile.name} ({tile.colorGroup}), price ${tile.price}. Nobody owns it, "
             f"and you have ${player.cashBalance}. You already hold {held} of the {len(group)} "
             f"{tile.colorGroup} properties.\n"
@@ -181,8 +198,9 @@ Action: [SUBMIT_DEAL] give=[] give_cash=90 get=[Mediterranean Avenue] get_cash=0
 
     def open_negotiation(self, game, player, opponent):
         self._start(
-            opponent,
-            f"{describe_state(game, player, opponent)}\n\n"
+            game,
+            player,
+            f"{describe_state(game, player)}\n\n"
             f"It is your turn to act. You may open a negotiation with {opponent.playerName} by "
             "proposing a trade, or pass.\n"
             "Allowed actions: [SUBMIT_DEAL] give=[...] give_cash=N get=[...] get_cash=M, or [PASS].",
@@ -195,8 +213,9 @@ Action: [SUBMIT_DEAL] give=[] give_cash=90 get=[Mediterranean Avenue] get_cash=0
         )
         if not self.messages:  # first message of this conversation: include the game state
             self._start(
-                opponent,
-                f"{describe_state(game, player, opponent)}\n\n{incoming_text}\n{actions_line}",
+                game,
+                player,
+                f"{describe_state(game, player)}\n\n{incoming_text}\n{actions_line}",
             )
         else:
             self.messages.append({"role": "user", "content": f"{incoming_text}\n{actions_line}"})

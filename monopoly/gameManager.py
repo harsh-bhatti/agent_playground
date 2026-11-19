@@ -371,14 +371,18 @@ class GameManager:
 
     # ------------------------------------------------------------ negotiation
     def negotiationPhase(self, player):
-        """After moving, the active player's agent may open a negotiation (MVP: 2 players)."""
+        """After moving, the active player's agent may open a negotiation.
+
+        For now only 2-player games negotiate. Games set up with more players skip this
+        step until choosing a partner is added (phase 2 of the N-player plan).
+        """
         if self.agents.get(player.playerName) is None:
             return
+        if len(self.players) != 2:
+            return  # N-player negotiation is not built yet
         opponents = [p for p in self.activePlayers() if p.playerName != player.playerName]
         if not opponents:
             return  # nobody left to trade with
-        if len(opponents) != 1:
-            raise NotImplementedError("The negotiation MVP supports exactly 2 players.")
         opponent = opponents[0]
         if opponent.playerName not in self.agents:
             return  # nobody on the other side to talk to

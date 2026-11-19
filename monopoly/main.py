@@ -1,11 +1,14 @@
-"""Run a Monopoly game between two agents.
+"""Run a Monopoly game between agents (4 players by default).
 
 Examples (run from the project's top folder):
 
-    python monopoly\\main.py                       # offline: two rule-based bots, no API, no tokens
-    python monopoly\\main.py --mode llm-vs-rule    # Agent A is an LLM, Agent B is a rule-based bot
-    python monopoly\\main.py --mode llm            # both agents are LLMs
+    python monopoly\\main.py                       # offline: rule-based bots, no API, no tokens
+    python monopoly\\main.py --players 2           # the original two-player game
+    python monopoly\\main.py --mode llm-vs-rule    # Agent A is an LLM, the others are rule-based bots
+    python monopoly\\main.py --mode llm            # every agent is an LLM
     python monopoly\\main.py --mode llm --turns 6 --show-thoughts
+
+Note: with more than 2 players there is no trading yet (it comes with choosing a partner).
 """
 import argparse
 import json
@@ -17,24 +20,32 @@ import llm_client
 from agents import PERSONAS, LLMAgent, RuleBasedAgent
 from gameManager import GameManager
 
-NAMES = ["Agent A", "Agent B"]
+MAX_PLAYERS = 26  # Agent A ... Agent Z
 
 
-def build_agents(args):
-    if args.mode == "mock":
-        return {
-            "Agent A": RuleBasedAgent("Agent A", propose=True),
-            "Agent B": RuleBasedAgent("Agent B", propose=True),
-        }
-    if args.mode == "llm-vs-rule":
-        return {
-            "Agent A": LLMAgent("Agent A", persona=args.persona_a),
-            "Agent B": RuleBasedAgent("Agent B", propose=False),
-        }
-    return {
-        "Agent A": LLMAgent("Agent A", persona=args.persona_a),
-        "Agent B": LLMAgent("Agent B", persona=args.persona_b),
-    }
+def player_names(count):
+    """["Agent A", "Agent B", ...] for `count` players."""
+    return [f"Agent {chr(ord('A') + i)}" for i in range(count)]
+
+
+def build_agents(args, names):
+    """One agent per player name.
+
+    mock:        every player is a rule-based bot that proposes trades.
+    llm-vs-rule: Agent A is an LLM; everyone else is a rule-based bot that only responds.
+    llm:         every player is an LLM. --persona-a / --persona-b set Agent A / Agent B;
+                 other players get no persona.
+    """
+    personas = {"Agent A": args.persona_a, "Agent B": args.persona_b}
+    agents = {}
+    for name in names:
+        if args.mode == "mock":
+            agents[name] = RuleBasedAgent(name, propose=True)
+        elif args.mode == "llm-vs-rule" and name != "Agent A":
+            agents[name] = RuleBasedAgent(name, propose=False)
+        else:
+            agents[name] = LLMAgent(name, persona=personas.get(name))
+    return agents
 
 
 def describe_result(game):
@@ -131,6 +142,8 @@ def save_log(game, args, stopped_early):
 def main():
     parser = argparse.ArgumentParser(description="Monopoly negotiation playground")
     parser.add_argument("--mode", choices=["mock", "llm-vs-rule", "llm"], default="mock")
+    parser.add_argument("--players", type=int, default=4,
+                        help=f"number of players, 2 to {MAX_PLAYERS} (default 4)")
     parser.add_argument("--turns", type=int, default=10, help="number of dice-roll turns to play")
     parser.add_argument("--max-negotiation-turns", type=int, default=6,
                         help="most replies allowed in one negotiation (each reply is one model call)")
@@ -139,6 +152,8 @@ def main():
     parser.add_argument("--persona-a", choices=list(PERSONAS), default=None)
     parser.add_argument("--persona-b", choices=list(PERSONAS), default=None)
     args = parser.parse_args()
+    if not 2 <= args.players <= MAX_PLAYERS:
+        parser.error(f"--players must be between 2 and {MAX_PLAYERS}")
 
     if args.mode != "mock" and not os.getenv(llm_client.API_KEY_ENV):
         print(f"{llm_client.API_KEY_ENV} is not set. Add it to your .env file, or run with --mode mock.")
@@ -148,9 +163,10 @@ def main():
         random.seed(args.seed)
 
     print(f"--- Booting Monopoly Playground Engine (mode: {args.mode}) ---")
+    names = player_names(args.players)
     game = GameManager(
-        NAMES,
-        agents=build_agents(args),
+        names,
+        agents=build_agents(args, names),
         maxNegotiationTurns=args.max_negotiation_turns,
         showThoughts=args.show_thoughts,
     )

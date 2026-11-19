@@ -7,6 +7,7 @@ Examples (run from the project's top folder):
     python monopoly\\main.py --mode llm-vs-rule    # Agent A is an LLM, the others are rule-based bots
     python monopoly\\main.py --mode llm            # every agent is an LLM
     python monopoly\\main.py --mode llm --turns 6 --show-thoughts
+    python monopoly\\main.py --players 2 --scenario swap   # a starting position with a known surplus
 
 Note: with more than 2 players there is no trading yet (it comes with choosing a partner).
 """
@@ -19,6 +20,7 @@ import time
 import llm_client
 from agents import PERSONAS, LLMAgent, RuleBasedAgent
 from gameManager import GameManager
+from scenarios import SCENARIOS, apply_scenario
 
 MAX_PLAYERS = 26  # Agent A ... Agent Z
 
@@ -226,6 +228,9 @@ def main():
     parser.add_argument("--mode", choices=["mock", "llm-vs-rule", "llm"], default="mock")
     parser.add_argument("--players", type=int, default=4,
                         help=f"number of players, 2 to {MAX_PLAYERS} (default 4)")
+    parser.add_argument("--scenario", choices=["none", *SCENARIOS], default="none",
+                        help="starting position: " + "; ".join(
+                            f"{name} = {text}" for name, (_, text) in SCENARIOS.items()))
     parser.add_argument("--turns", type=int, default=10, help="number of dice-roll turns to play")
     parser.add_argument("--max-negotiation-turns", type=int, default=6,
                         help="most replies allowed in one negotiation (each reply is one model call)")
@@ -263,6 +268,7 @@ def main():
         showThoughts=args.show_thoughts,
         maxCallsPerTurn=args.max_calls_per_turn,
     )
+    apply_scenario(game, args.scenario)
 
     stopped_early = False
     try:

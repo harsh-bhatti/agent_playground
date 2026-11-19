@@ -1450,6 +1450,73 @@ def test_per_player_stats_count_cut_off_replies():
     assert stats[B]["cut_off_replies"] == 0 and stats[B]["prompt_tokens"] == 0
 
 
+# ------------------------------------------------ swap scenario (restored)
+def _swap_game(players=(A, B), agents=None):
+    from scenarios import apply_scenario
+
+    game = GameManager(list(players), agents=agents or {})
+    with quiet():
+        apply_scenario(game, "swap")
+    return game
+
+
+def test_swap_scenario_starting_position():
+    game = _swap_game(FOUR)
+    a, b, c, d = (game.getPlayer(n) for n in FOUR)
+    assert sorted(game.board.getTile(i).name for i in a.ownedProperties) == \
+        ["Baltic Avenue", "Oriental Avenue", "Vermont Avenue"]
+    assert sorted(game.board.getTile(i).name for i in b.ownedProperties) == \
+        ["Connecticut Avenue", "Mediterranean Avenue"]
+    assert (a.cashBalance, b.cashBalance) == (1240, 1320)
+    assert all(game.calculateEquity(p) == 1500 for p in (a, b, c, d))  # same net worth for all
+    assert c.ownedProperties == [] and d.ownedProperties == []
+    assert "Scenario 'swap'" in game.events[0]
+    check_invariants(game)
+
+
+def test_swap_scenario_values_match_the_documented_numbers():
+    game = _swap_game()
+    a, b = game.getPlayer(A), game.getPlayer(B)
+    swap = Deal((BALTIC,), 0, (tile_id("Connecticut Avenue"),), 0)
+    assert game.dealValueDelta(a, swap) == 252 and game.dealValueDelta(b, swap.flipped()) == 12
+    with quiet():
+        trade = game.executeTrade(a, b, swap.to_offer_data())
+    assert (trade["initiator_strategic_delta"], trade["target_strategic_delta"]) == (252, 12)
+    assert (trade["initiator_equity_delta"], trade["target_equity_delta"]) == (60, -60)
+    assert game.ownsFullSet(A, "Light Blue") and game.ownsFullSet(B, "Brown")
+    check_invariants(game)
+
+
+def test_swap_scenario_needs_a_fresh_game_and_two_players():
+    from scenarios import apply_scenario
+
+    game = _swap_game()
+    try:
+        apply_scenario(game, "swap")
+        raise AssertionError("expected an error")
+    except ValueError as error:
+        assert "already owned" in str(error)
+    try:
+        apply_scenario(GameManager([A]), "swap")
+        raise AssertionError("expected an error")
+    except ValueError as error:
+        assert "at least 2 players" in str(error)
+    apply_scenario(GameManager([A, B]), "none")  # "none" does nothing
+
+
+def test_swap_scenario_mock_games_trade_and_stay_consistent():
+    deals = 0
+    for seed in range(5):
+        random.seed(seed)
+        game = _swap_game(agents={A: RuleBasedAgent(A), B: RuleBasedAgent(B)})
+        with quiet():
+            for _ in range(40):
+                game.executeTurn()
+                check_invariants(game)
+        deals += sum(1 for r in game.negotiationResults if r.trade)
+    assert deals > 0
+
+
 # ------------------------------------------------------------------ runner
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]

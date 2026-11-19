@@ -83,13 +83,19 @@ def print_summary(game, stopped_early):
         outcomes[result.outcome] = outcomes.get(result.outcome, 0) + 1
     print(f"Negotiation phases: {len(game.negotiationResults)}  {outcomes}")
 
-    turns = [t for r in game.negotiationResults for t in r.turns] + game.decisionLog
+    all_turns = [t for r in game.negotiationResults for t in r.turns] + game.decisionLog
+    turns = [t for t in all_turns if t["attempts"] > 0]  # the agent was actually asked
     if turns:
         bad_format = sum(1 for t in turns if not t["format_ok"])
         fallbacks = sum(1 for t in turns if t["fell_back"])
         retried = sum(1 for t in turns if t["attempts"] > 1)
         print(f"Agent replies: {len(turns)}  (format problems: {bad_format}, "
               f"retried after an invalid reply: {retried}, used default after retry: {fallbacks})")
+    capped = [t for t in all_turns if t.get("capped")]
+    if capped:
+        never_asked = sum(1 for t in capped if t["attempts"] == 0)
+        print(f"Call cap ({game.maxCallsPerTurn} per turn) reached {len(capped)} time(s): "
+              f"{never_asked} decision(s) not asked, {len(capped) - never_asked} retry(s) skipped")
 
     # Every executed deal, scored against not trading at all (the BATNA: change of 0).
     deals = [r.trade for r in game.negotiationResults if r.trade]
@@ -147,6 +153,9 @@ def main():
     parser.add_argument("--turns", type=int, default=10, help="number of dice-roll turns to play")
     parser.add_argument("--max-negotiation-turns", type=int, default=6,
                         help="most replies allowed in one negotiation (each reply is one model call)")
+    parser.add_argument("--max-calls-per-turn", type=int, default=12,
+                        help="most agent calls per dice roll, retries included (0 = no limit). "
+                             "When it runs out the agent is not asked and the safe default is used")
     parser.add_argument("--seed", type=int, default=None, help="fix the dice for repeatable games")
     parser.add_argument("--show-thoughts", action="store_true", help="print each agent's private Thought")
     parser.add_argument("--persona-a", choices=list(PERSONAS), default=None)
@@ -154,6 +163,8 @@ def main():
     args = parser.parse_args()
     if not 2 <= args.players <= MAX_PLAYERS:
         parser.error(f"--players must be between 2 and {MAX_PLAYERS}")
+    if args.max_calls_per_turn < 0:
+        parser.error("--max-calls-per-turn must be 0 (no limit) or more")
 
     if args.mode != "mock" and not os.getenv(llm_client.API_KEY_ENV):
         print(f"{llm_client.API_KEY_ENV} is not set. Add it to your .env file, or run with --mode mock.")
@@ -169,6 +180,7 @@ def main():
         agents=build_agents(args, names),
         maxNegotiationTurns=args.max_negotiation_turns,
         showThoughts=args.show_thoughts,
+        maxCallsPerTurn=args.max_calls_per_turn,
     )
 
     stopped_early = False

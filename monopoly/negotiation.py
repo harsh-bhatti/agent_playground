@@ -50,6 +50,7 @@ class Turn:
     tokens: int = 0
     retry_errors: list = field(default_factory=list)  # why each earlier attempt was rejected
     first_reply: str | None = None  # the model's first reply, kept only if it had to be retried
+    capped: bool = False  # True if the per-turn call budget stopped a call (attempts=0: never asked)
 
     def to_dict(self):
         return asdict(self)
@@ -60,7 +61,8 @@ class NegotiationResult:
     game_turn: int
     initiator: str
     responder: str | None  # chosen by the initiator's opening offer; None if it passed
-    outcome: str = "max_turns"  # deal | walk_away | declined | max_turns | reject_loop | invalid_deal
+    # deal | walk_away | declined | max_turns | reject_loop | invalid_deal | call_cap
+    outcome: str = "max_turns"
     proposer: str | None = None
     deal_text: str | None = None  # from the proposer's point of view
     trade: dict | None = None  # value changes, filled in when a deal happens
@@ -78,16 +80,31 @@ def get_valid_action(game, agent, speaker, listener, decision, first_call, pendi
 
     listener: the player already in this negotiation, or None (a buy decision, or an
     opening offer whose to=[...] still has to pick the partner).
+
+    Every call (the first one and the retry) uses one unit of the game's per-turn call
+    budget. If none is left, the agent is not asked and the safe default is used.
     """
     allowed = {"buy": BUY_ACTIONS, "open": OPEN_ACTIONS, "respond": RESPOND_ACTIONS}[decision]
     need_talk = decision != "buy"
     tokens_before = llm_client.total_tokens_used
+
+    if not game.useAgentCall():
+        return Turn(
+            game_turn=game.turnCount,
+            speaker=speaker.playerName,
+            decision=decision,
+            kind=FALLBACK[decision],
+            attempts=0,
+            capped=True,
+            error="The call budget for this turn is used up, so the agent was not asked.",
+        )
 
     reply = first_call()
     attempts = 0
     first_format_ok = None
     first_reply = reply
     retry_errors = []
+    capped = False
     while True:
         attempts += 1
         parsed = parse_reply(reply, need_talk)
@@ -103,6 +120,9 @@ def get_valid_action(game, agent, speaker, listener, decision, first_call, pendi
         if first_format_ok is None:
             first_format_ok = parsed.format_ok
         if act.error is None or attempts >= MAX_ATTEMPTS:
+            break
+        if not game.useAgentCall():
+            capped = True  # invalid reply, but no budget left for the retry
             break
         retry_errors.append(act.error)
         reply = agent.correct(act.error)
@@ -127,6 +147,7 @@ def get_valid_action(game, agent, speaker, listener, decision, first_call, pendi
         tokens=llm_client.total_tokens_used - tokens_before,
         retry_errors=retry_errors,
         first_reply=(first_reply or "")[:800] if retry_errors else None,
+        capped=capped,
     )
 
 
@@ -141,7 +162,11 @@ def _print_turn(game, turn):
     if turn.deal:
         text += f" {turn.deal.describe(game.board)}"
     note = ""
-    if turn.fell_back:
+    if turn.capped and turn.attempts == 0:
+        note = "   (call budget for this turn used up; the agent was not asked)"
+    elif turn.capped:
+        note = f"   (!) invalid, and no call budget left to retry. Problem: {turn.error}"
+    elif turn.fell_back:
         note = f"   (!) invalid even after a retry, used the default. Problem: {turn.error}"
     elif turn.attempts > 1:
         note = f"   (retried once because: {turn.retry_errors[0]})"
@@ -223,6 +248,9 @@ def run_negotiation(game, initiator, responder=None, max_turns=6):
             _print_turn(game, turn)
             result.turns.append(turn.to_dict())
             kind = turn.kind
+            if turn.capped:
+                result.outcome = "call_cap"  # out of budget: end safely, nothing changes
+                break
 
             if kind == "PASS":
                 result.outcome = "declined"

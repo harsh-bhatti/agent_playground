@@ -13,7 +13,8 @@ SET_BONUS_RATE = 0.6
 
 
 class GameManager:
-    def __init__(self, playerNames, agents=None, maxNegotiationTurns=6, showThoughts=False):
+    def __init__(self, playerNames, agents=None, maxNegotiationTurns=6, showThoughts=False,
+                 maxCallsPerTurn=None):
         self.players = [Player(name) for name in playerNames]
         self.board = Board()
         self.activePlayerIndex = 0
@@ -22,6 +23,11 @@ class GameManager:
         self.agents = agents or {}
         self.maxNegotiationTurns = maxNegotiationTurns
         self.showThoughts = showThoughts
+
+        # Budget of agent calls per dice roll (buy decision + negotiation, retries included).
+        # None or 0 means no limit. Each agent reply counts, whether it is an LLM or a rule bot.
+        self.maxCallsPerTurn = maxCallsPerTurn
+        self.callsThisTurn = 0
 
         self.turnCount = 0
         self.events = []  # short plain-English history, shown to agents
@@ -56,6 +62,7 @@ class GameManager:
         if self.isGameOver():
             return  # nothing happens after the game has ended
         self.turnCount += 1
+        self.callsThisTurn = 0  # a fresh call budget for every dice roll
         activePlayer = self.players[self.activePlayerIndex]
         rollTotal, isDouble = self.rollDice()
 
@@ -67,6 +74,13 @@ class GameManager:
         # Doubles roll again, unless the player was just eliminated.
         if not isDouble or activePlayer.isBankrupt:
             self._advanceToNextPlayer()
+
+    def useAgentCall(self):
+        """Count one agent call against this turn's budget. Returns False if it is used up."""
+        if self.maxCallsPerTurn and self.callsThisTurn >= self.maxCallsPerTurn:
+            return False
+        self.callsThisTurn += 1
+        return True
 
     def _advanceToNextPlayer(self):
         """Move to the next player who is still in the game."""

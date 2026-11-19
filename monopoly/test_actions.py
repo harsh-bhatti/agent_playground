@@ -897,6 +897,103 @@ def test_four_player_low_cash_games_end_consistently():
     assert eliminated >= 5, f"only {eliminated} eliminations in 20 games"
 
 
+# ------------------------------------------------- call budget (phase 3)
+def _offer(n):
+    return reply(f"[SUBMIT_DEAL] give=[] give_cash={n} get=[Mediterranean Avenue] get_cash=0")
+
+
+def _counter(n):
+    return reply(f"[SUBMIT_DEAL] give=[Mediterranean Avenue] give_cash=0 get=[] get_cash={n}")
+
+
+def test_call_cap_ends_negotiation_without_asking():
+    a = ScriptedAgent(A, open=[_offer(10)], respond=[_offer(20), _offer(30)])
+    b = ScriptedAgent(B, respond=[_counter(500), _counter(400), _counter(300)])
+    game = make_game(a, b, max_turns=10)
+    game.maxCallsPerTurn = 3
+    result = run(game)
+    assert result.outcome == "call_cap" and len(result.turns) == 4
+    last = result.turns[-1]
+    assert last["speaker"] == B and last["capped"] and last["attempts"] == 0
+    assert last["kind"] == "REJECT_DEAL"  # the safe default; it is not acted on
+    assert len(b.q["respond"]) == 2  # B was asked only once: the capped call never happened
+    assert game.callsThisTurn == 3
+    assert game.getPlayer(A).cashBalance == 1500 and game.getPlayer(B).cashBalance == 1500
+    check_invariants(game)
+
+
+def test_call_cap_blocks_the_retry():
+    fake = "[SUBMIT_DEAL] give=[Reading Railroad] give_cash=0 get=[] get_cash=50"  # A does not own it
+    a = ScriptedAgent(A, open=[reply(fake)], correct=[reply(OFFER)])
+    game = make_game(a, ScriptedAgent(B))
+    game.maxCallsPerTurn = 1
+    result = run(game)
+    turn = result.turns[0]
+    assert result.outcome == "call_cap"
+    assert turn["capped"] and turn["fell_back"] and turn["attempts"] == 1 and turn["kind"] == "PASS"
+    assert "does not own" in turn["error"]
+    assert a.errors == []  # correct() was never called
+    check_invariants(game)
+
+
+def test_capped_buy_decision_passes_without_asking():
+    from negotiation import ask_buy_decision
+
+    agent = ScriptedAgent(A, buy=[reply("[BUY]")])
+    game = make_game(agent)
+    game.maxCallsPerTurn = 2
+    game.callsThisTurn = 2
+    with quiet():
+        bought = ask_buy_decision(game, agent, game.getPlayer(A), game.board.getTile(tile_id("Vermont Avenue")))
+    assert bought is False and agent.q["buy"] == [reply("[BUY]")]
+    assert game.decisionLog[0]["capped"] and game.decisionLog[0]["attempts"] == 0
+
+
+def test_call_budget_resets_every_dice_roll():
+    agent = ScriptedAgent(A, buy=[reply("[BUY]")])
+    game = GameManager([A, B], agents={A: agent}, maxCallsPerTurn=1)
+    game.callsThisTurn = 1  # used up "last turn"
+    game.rollDice = lambda: (tile_id("Vermont Avenue"), False)
+    with quiet():
+        game.executeTurn()
+    assert tile_id("Vermont Avenue") in game.getPlayer(A).ownedProperties  # the buy got budget
+    assert game.callsThisTurn == 1
+
+
+def test_zero_or_none_means_no_call_limit():
+    for limit in (0, None):
+        game = GameManager([A, B], maxCallsPerTurn=limit)
+        assert all(game.useAgentCall() for _ in range(500))
+
+
+def test_summary_reports_the_call_cap():
+    import main
+
+    a = ScriptedAgent(A, open=[_offer(10)], respond=[_offer(20)])
+    b = ScriptedAgent(B, respond=[_counter(500), _counter(400)])
+    game = make_game(a, b, max_turns=10)
+    game.maxCallsPerTurn = 2
+    game.negotiationResults.append(run(game))
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        main.print_summary(game, stopped_early=False)
+    text = out.getvalue()
+    assert "Call cap (2 per turn) reached 1 time(s): 1 decision(s) not asked" in text
+    assert "Agent replies: 2 " in text  # the capped turn is not counted as a reply
+    assert "'call_cap': 1" in text
+
+
+def test_four_player_mock_games_respect_the_call_cap():
+    for cap in (1, 3, 12):
+        random.seed(cap)
+        game = GameManager(FOUR, agents={n: RuleBasedAgent(n) for n in FOUR}, maxCallsPerTurn=cap)
+        with quiet():
+            for _ in range(100):
+                game.executeTurn()
+                assert game.callsThisTurn <= cap
+                check_invariants(game)
+
+
 # ------------------------------------------------------------------ runner
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]

@@ -88,6 +88,7 @@ class NegotiationResult:
     kind: str = "targeted"  # "targeted" | "broadcast"
     idea_text: str | None = None  # broadcast only: the idea, from the initiator's point of view
     offers: dict = field(default_factory=dict)  # broadcast only: {player: offer from their view}
+    participants: list = field(default_factory=list)  # everyone who replied, in order of first reply
 
     def to_dict(self):
         return asdict(self)
@@ -458,6 +459,7 @@ def run_negotiation(game, initiator, responder=None, max_turns=6):
             agent.end_conversation()
         game.releaseLocks()  # every offer closes when the negotiation ends, however it ends
 
+    result.participants = list(dict.fromkeys(t["speaker"] for t in result.turns))
     if result.outcome != "declined":
         print(f"  [NEGOTIATION] Outcome: {result.outcome}")
     return result

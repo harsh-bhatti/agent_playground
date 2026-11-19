@@ -1235,6 +1235,103 @@ def test_four_player_mock_games_with_ideas_and_offers():
     assert kinds["targeted"] > 0 and kinds["broadcast"] > 0, kinds
 
 
+# --------------------------------------------- per-player stats (phase 5)
+def _negotiate(game, opener):
+    from negotiation import run_negotiation
+
+    with quiet():
+        result = run_negotiation(game, game.getPlayer(opener), None, game.maxNegotiationTurns)
+    game.negotiationResults.append(result)
+    return result
+
+
+def _three_deal_game():
+    """A, B, C, D with three known deals (numbers worked out by hand; SET_BONUS_RATE 0.6):
+
+    1. A buys Mediterranean from C for $90: completes A's Brown set.
+       A: strategic +42 (gains the $72 set bonus) but net worth -30.  C: +30 / +30.
+    2. D buys Reading Railroad from B for $200: exactly the price, one railroad, no bonus.
+       B: 0 / 0 and D: 0 / 0 (zero-gain deals).
+    3. C buys Baltic from A for $50: A breaks its own set.  A: -82 / -10.  C: +10 / +10.
+    Plus B makes one buy decision (Vermont Avenue).
+    """
+    a = ScriptedAgent(A, open=[reply(TO_C)], respond=[reply("[ACCEPT_DEAL]")])
+    b = ScriptedAgent(B, buy=[reply("[BUY]")], respond=[reply("[ACCEPT_DEAL]")])
+    c = ScriptedAgent(C, respond=[reply("[ACCEPT_DEAL]")],
+                      open=[reply("[SUBMIT_DEAL] to=[Agent A] give=[] give_cash=50 get=[Baltic Avenue] get_cash=0")])
+    d = ScriptedAgent(D, open=[reply("[SUBMIT_DEAL] to=[Agent B] give=[] give_cash=200 "
+                                     "get=[Reading Railroad] get_cash=0")])
+    game = make_four(a=a, b=b, c=c, d=d)
+    land_on(game, B, tile_id("Vermont Avenue"))
+    for opener in (A, D, C):
+        assert _negotiate(game, opener).outcome == "deal"
+    return game
+
+
+def test_per_player_stats_numbers():
+    import main
+
+    stats = main.per_player_stats(_three_deal_game())
+    expected = {  # deals, strategic, net worth, worse strategic, worse net worth, zero gain, opened, calls
+        A: (2, -40, -40, 1, 2, 0, 1, 2),
+        B: (1, 0, 0, 0, 0, 1, 0, 2),  # 2 calls: the buy decision and accepting D's offer
+        C: (2, 40, 40, 0, 0, 0, 1, 2),
+        D: (1, 0, 0, 0, 0, 1, 1, 1),
+    }
+    keys = ("deals", "trade_strategic_change", "trade_net_worth_change", "deals_worse_strategic",
+            "deals_worse_net_worth", "deals_zero_strategic_gain", "negotiations_opened", "agent_calls")
+    for name, values in expected.items():
+        assert tuple(stats[name][k] for k in keys) == values, (name, {k: stats[name][k] for k in keys})
+        assert stats[name]["ideas_floated"] == 0 and stats[name]["capped"] == 0
+        assert not stats[name]["bankrupt"]
+
+
+def test_per_player_stats_count_ideas_caps_and_participants():
+    import main
+
+    a = ScriptedAgent(A, open=[reply(IDEA)], choose=[reply("[ACCEPT_DEAL] from=[Agent C]")])
+    c = ScriptedAgent(C, idea=[reply(C_SELLS)])
+    game = make_four(a=a, c=c)
+    game.maxCallsPerTurn = 4  # the proposer's choice is capped
+    result = _negotiate(game, A)
+    assert result.participants == [A, B, C, D]
+    stats = main.per_player_stats(game)
+    assert stats[A]["ideas_floated"] == 1 and stats[A]["negotiations_opened"] == 1
+    assert stats[A]["capped"] == 1 and stats[A]["agent_calls"] == 1  # floated, never asked to choose
+    assert stats[B]["agent_calls"] == stats[C]["agent_calls"] == stats[D]["agent_calls"] == 1
+    assert all(s["deals"] == 0 for s in stats.values())
+
+
+def test_targeted_negotiation_participants():
+    game = make_four(a=ScriptedAgent(A, open=[reply(TO_C)]), c=ScriptedAgent(C, respond=[reply("[WALK_AWAY]")]))
+    assert _negotiate(game, A).participants == [A, C]
+
+
+def test_summary_and_log_show_per_player_numbers():
+    import argparse
+    import main
+
+    game = _three_deal_game()
+    with quiet():
+        game.finishByTurnLimit()
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        main.print_summary(game, stopped_early=False)
+    lines = out.getvalue().splitlines()
+    assert "Deals executed: 3" in lines
+    row_a = next(line for line in lines if line.strip().startswith(A) and "-40" in line)
+    assert row_a.split()[2:6] == ["2", "-40", "-40", "1/2"]
+    assert sum(1 for line in lines if line.startswith("  Agent ")) == 4  # one table row per player
+
+    args = argparse.Namespace(mode="mock", players=4, turns=0, seed=None)
+    log = main.build_log(game, args, stopped_early=False)
+    assert log["per_player"] == main.per_player_stats(game)
+    assert log["negotiations"][0]["participants"] == [A, C]
+    assert log["negotiations"][0]["kind"] == "targeted"
+    json_text = __import__("json").dumps(log)  # the whole log must be JSON-serializable
+    assert '"per_player"' in json_text
+
+
 # ------------------------------------------------------------------ runner
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]

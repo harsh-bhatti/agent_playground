@@ -66,6 +66,70 @@ def describe_result(game):
     return "Result: game not finished"
 
 
+def per_player_stats(game):
+    """Per-player numbers for the summary and the log.
+
+    Trade numbers score every executed deal against not trading at all (the BATNA: a
+    change of 0), with both measures: strategic value (placeholder reward with the set
+    bonus) and net worth (cash + property prices). "worse" = the deal changed it below 0;
+    "zero gain" = the deal changed strategic value by exactly 0.
+    Call numbers count agent replies (retries included) and calls skipped by the cap.
+    """
+    stats = {
+        p.playerName: {
+            "deals": 0,
+            "trade_strategic_change": 0,
+            "trade_net_worth_change": 0,
+            "deals_worse_strategic": 0,
+            "deals_worse_net_worth": 0,
+            "deals_zero_strategic_gain": 0,
+            "negotiations_opened": 0,
+            "ideas_floated": 0,
+            "agent_calls": 0,
+            "capped": 0,
+            "fallbacks": 0,
+            "tokens": 0,
+            "bankrupt": p.isBankrupt,
+            "final_net_worth": game.calculateEquity(p),
+        }
+        for p in game.players
+    }
+    for result in game.negotiationResults:
+        stats[result.initiator]["negotiations_opened"] += 1
+        if result.kind == "broadcast":
+            stats[result.initiator]["ideas_floated"] += 1
+        if result.trade:
+            for role in ("initiator", "target"):
+                s = stats[result.trade[role]]
+                strategic = result.trade[f"{role}_strategic_delta"]
+                worth = result.trade[f"{role}_equity_delta"]
+                s["deals"] += 1
+                s["trade_strategic_change"] += strategic
+                s["trade_net_worth_change"] += worth
+                s["deals_worse_strategic"] += strategic < 0
+                s["deals_worse_net_worth"] += worth < 0
+                s["deals_zero_strategic_gain"] += strategic == 0
+    for turn in [t for r in game.negotiationResults for t in r.turns] + game.decisionLog:
+        s = stats[turn["speaker"]]
+        s["agent_calls"] += turn["attempts"]
+        s["capped"] += bool(turn.get("capped"))
+        s["fallbacks"] += bool(turn["fell_back"])
+        s["tokens"] += turn["tokens"]
+    return stats
+
+
+def print_player_table(stats):
+    print("Per player (trades scored against not trading; worse = below 0, strategic/net worth):")
+    print(f"  {'player':<10}{'deals':>6}{'strategic':>11}{'net worth':>11}{'worse s/n':>11}"
+          f"{'zero gain':>11}{'opened':>8}{'ideas':>7}{'calls':>7}{'capped':>8}{'tokens':>8}")
+    for name, s in stats.items():
+        worse = f"{s['deals_worse_strategic']}/{s['deals_worse_net_worth']}"
+        print(f"  {name:<10}{s['deals']:>6}{s['trade_strategic_change']:>+11d}"
+              f"{s['trade_net_worth_change']:>+11d}{worse:>11}{s['deals_zero_strategic_gain']:>11}"
+              f"{s['negotiations_opened']:>8}{s['ideas_floated']:>7}{s['agent_calls']:>7}"
+              f"{s['capped']:>8}{s['tokens']:>8}")
+
+
 def print_summary(game, stopped_early):
     print("\n" + "=" * 60)
     print("GAME SUMMARY" + ("  (stopped early)" if stopped_early else ""))
@@ -101,29 +165,16 @@ def print_summary(game, stopped_early):
         print(f"Call cap ({game.maxCallsPerTurn} per turn) reached {len(capped)} time(s): "
               f"{never_asked} decision(s) not asked, {len(capped) - never_asked} retry(s) skipped")
 
-    # Every executed deal, scored against not trading at all (the BATNA: change of 0).
     deals = [r.trade for r in game.negotiationResults if r.trade]
-    if deals:
-        print(f"Deals executed: {len(deals)}")
-        for player in game.players:
-            deltas = []
-            for trade in deals:
-                if trade["initiator"] == player.playerName:
-                    deltas.append(trade["initiator_strategic_delta"])
-                elif trade["target"] == player.playerName:
-                    deltas.append(trade["target_strategic_delta"])
-            worse = sum(1 for d in deltas if d < 0)
-            print(f"    {player.playerName}: total strategic change {sum(deltas):+d}; "
-                  f"deals that left it worse off than not trading: {worse} of {len(deltas)}")
+    print(f"Deals executed: {len(deals)}")
+    print_player_table(per_player_stats(game))
     if llm_client.total_calls:
         print(f"LLM calls: {llm_client.total_calls}   tokens used: {llm_client.total_tokens_used}")
 
 
-def save_log(game, args, stopped_early):
-    folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs")
-    os.makedirs(folder, exist_ok=True)
-    path = os.path.abspath(os.path.join(folder, time.strftime("run_%Y%m%d_%H%M%S.json")))
-    data = {
+def build_log(game, args, stopped_early):
+    """Everything saved for research, as a dict (save_log writes it to logs/)."""
+    return {
         "settings": {**vars(args), "base_url": llm_client.BASE_URL, "model": llm_client.MODEL},
         "stopped_early": stopped_early,
         "turns_played": game.turnCount,
@@ -133,6 +184,7 @@ def save_log(game, args, stopped_early):
         "buy_decisions": game.decisionLog,
         "negotiations": [r.to_dict() for r in game.negotiationResults],
         "events": game.events,
+        "per_player": per_player_stats(game),
         "final": {
             p.playerName: {
                 "cash": p.cashBalance,
@@ -144,8 +196,14 @@ def save_log(game, args, stopped_early):
             for p in game.players
         },
     }
+
+
+def save_log(game, args, stopped_early):
+    folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs")
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.abspath(os.path.join(folder, time.strftime("run_%Y%m%d_%H%M%S.json")))
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+        json.dump(build_log(game, args, stopped_early), f, indent=2)
     return path
 
 

@@ -28,6 +28,11 @@ class GameManager:
         self.decisionLog = []  # every agent decision, saved for research
         self.negotiationResults = []
 
+        # How the game ended. endReason stays None while the game is running.
+        self.winner = None  # player name, or None for a draw / unfinished game
+        self.endReason = None  # "bankruptcy" | "turn_limit" | "stopped_early"
+        self.bankruptcies = []  # one dict per eliminated player
+
     # ------------------------------------------------------------------ basics
     def rollDice(self):
         die1 = random.randint(1, 6)
@@ -40,17 +45,35 @@ class GameManager:
     def logEvent(self, text):
         self.events.append(f"Turn {self.turnCount}: {text}")
 
+    def activePlayers(self):
+        """Players still in the game (not bankrupt)."""
+        return [p for p in self.players if not p.isBankrupt]
+
+    def isGameOver(self):
+        return self.endReason is not None
+
     def executeTurn(self):
+        if self.isGameOver():
+            return  # nothing happens after the game has ended
         self.turnCount += 1
         activePlayer = self.players[self.activePlayerIndex]
         rollTotal, isDouble = self.rollDice()
 
         print(f"\n{activePlayer.playerName} rolled a {rollTotal} {'(Doubles!)' if isDouble else ''}")
         self.resolveMovement(activePlayer, rollTotal)
-        self.negotiationPhase(activePlayer)
+        if not activePlayer.isBankrupt and not self.isGameOver():
+            self.negotiationPhase(activePlayer)
 
-        if not isDouble:
+        # Doubles roll again, unless the player was just eliminated.
+        if not isDouble or activePlayer.isBankrupt:
+            self._advanceToNextPlayer()
+
+    def _advanceToNextPlayer(self):
+        """Move to the next player who is still in the game."""
+        for _ in range(len(self.players)):
             self.activePlayerIndex = (self.activePlayerIndex + 1) % len(self.players)
+            if not self.players[self.activePlayerIndex].isBankrupt:
+                return
 
     def resolveMovement(self, player, steps):
         player.moveSpaces(steps)
@@ -79,14 +102,98 @@ class GameManager:
             self.logEvent(f"{player.playerName} passed on buying {propertyTile.name}.")
 
     def processRentPayment(self, payingPlayer, receivingPlayerId, amount):
-        receivingPlayer = self.getPlayer(receivingPlayerId)
-        if payingPlayer.deductFunds(amount):
-            receivingPlayer.addFunds(amount)
-            print(f"  -> TRANSACTION: {payingPlayer.playerName} paid ${amount} rent to {receivingPlayerId}.")
-            self.logEvent(f"{payingPlayer.playerName} paid ${amount} rent to {receivingPlayerId}.")
-        else:
-            print(f"  -> BANKRUPTCY: {payingPlayer.playerName} cannot afford ${amount} rent!")
-            self.logEvent(f"{payingPlayer.playerName} could not afford ${amount} rent.")
+        self.chargePlayer(payingPlayer, amount, receivingPlayerId, "rent")
+
+    # ------------------------------------------------- payments & bankruptcy
+    def chargePlayer(self, player, amount, creditorName=None, reason=""):
+        """Make `player` pay `amount` to another player (creditorName) or to the bank (None).
+
+        This is the one place rent and tax are charged. If the player cannot pay in full,
+        they go bankrupt. Returns True if the payment was made.
+        """
+        payTo = creditorName or "the bank"
+        if player.deductFunds(amount):
+            if creditorName:
+                self.getPlayer(creditorName).addFunds(amount)
+            print(f"  -> TRANSACTION: {player.playerName} paid ${amount} {reason} to {payTo}.")
+            self.logEvent(f"{player.playerName} paid ${amount} {reason} to {payTo}.")
+            return True
+        self.declareBankruptcy(player, amount, creditorName, reason)
+        return False
+
+    def declareBankruptcy(self, player, owed, creditorName=None, reason=""):
+        """Eliminate a player who cannot pay what they owe.
+
+        Owed to a player: that player gets all the bankrupt player's cash and properties.
+        Owed to the bank: the cash is lost and the properties go back to the bank, unowned.
+        """
+        creditor = self.getPlayer(creditorName) if creditorName else None
+        paid = player.cashBalance
+        player.cashBalance = 0
+        if creditor:
+            creditor.addFunds(paid)
+
+        handedOver = list(player.ownedProperties)
+        for propId in handedOver:
+            tile = self.board.getTile(propId)
+            player.removeProperty(propId)
+            if creditor:
+                tile.ownerId = creditor.playerName
+                creditor.addProperty(propId)
+            else:
+                tile.ownerId = None
+                tile.houseCount = 0
+                tile.isMortgaged = False
+        player.isBankrupt = True
+
+        payTo = creditorName or "the bank"
+        propNames = ", ".join(self.board.getTile(i).name for i in handedOver) or "none"
+        print(f"  -> BANKRUPTCY: {player.playerName} owes ${owed} {reason} but has only ${paid}. "
+              f"{player.playerName} is out. {payTo} receives ${paid if creditor else 0} "
+              f"and properties: {propNames if creditor else 'none (returned to bank)'}.")
+        self.logEvent(f"{player.playerName} could not pay ${owed} {reason} to {payTo} and went bankrupt.")
+        self.bankruptcies.append({
+            "turn": self.turnCount,
+            "player": player.playerName,
+            "owed": owed,
+            "reason": reason,
+            "creditor": creditorName,  # None means the bank
+            "cash_handed_over": paid,
+            "properties": [self.board.getTile(i).name for i in handedOver],
+        })
+
+        remaining = self.activePlayers()
+        if len(remaining) == 1:
+            self._endGame(remaining[0].playerName, "bankruptcy")
+
+    def finishByTurnLimit(self):
+        """The turn limit was reached: highest net worth wins; a tie is a draw (winner None)."""
+        if self.isGameOver():
+            return
+        worths = {p.playerName: self.calculateEquity(p) for p in self.activePlayers()}
+        best = max(worths.values())
+        leaders = [name for name, worth in worths.items() if worth == best]
+        self._endGame(leaders[0] if len(leaders) == 1 else None, "turn_limit")
+
+    def markStoppedEarly(self):
+        """The run was cut short (e.g. the model API failed): no winner is declared."""
+        if not self.isGameOver():
+            self._endGame(None, "stopped_early")
+
+    def _endGame(self, winner, reason):
+        self.winner = winner
+        self.endReason = reason
+        result = f"{winner} wins" if winner else "no winner"
+        print(f"\n*** GAME OVER ({reason}): {result} ***")
+        self.logEvent(f"Game over ({reason}): {result}.")
+
+    def gameResult(self):
+        """How the game ended, for the summary and the saved log."""
+        return {
+            "winner": self.winner,
+            "end_reason": self.endReason,
+            "bankruptcies": list(self.bankruptcies),
+        }
 
     # ------------------------------------------------------------ rent & sets
     def colorGroups(self):
@@ -153,6 +260,9 @@ class GameManager:
         """Return None if the trade is legal, otherwise a plain-English reason it is not."""
         if initiator.playerName == target.playerName:
             return "You cannot trade with yourself."
+        for p in (initiator, target):
+            if p.isBankrupt:
+                return f"{p.playerName} is bankrupt and out of the game, so cannot trade."
         giveProps, recvProps = offerData["giveProps"], offerData["receiveProps"]
         if len(set(giveProps)) != len(giveProps) or len(set(recvProps)) != len(recvProps):
             return "A property is listed twice."
@@ -197,6 +307,14 @@ class GameManager:
 
         return self.executeTrade(initiator, target, offerData)
 
+    def _transferCash(self, payer, payee, amount):
+        """Move cash between players. Raises instead of failing silently."""
+        if amount < 0:
+            raise ValueError(f"Cannot transfer a negative amount (${amount}).")
+        if not payer.deductFunds(amount):
+            raise RuntimeError(f"{payer.playerName} cannot pay ${amount} (has ${payer.cashBalance}).")
+        payee.addFunds(amount)
+
     def executeTrade(self, initiator, target, offerData):
         """Run a trade if it is legal. Returns a dict of results, or None if it was refused."""
         problem = self.validateTrade(initiator, target, offerData)
@@ -210,11 +328,12 @@ class GameManager:
         initiatorPreStrategic = self.calculateStrategicValue(initiator)
         targetPreStrategic = self.calculateStrategicValue(target)
 
-        # 2. Execute Asset Swap
-        initiator.deductFunds(offerData["giveCash"])
-        target.addFunds(offerData["giveCash"])
-        target.deductFunds(offerData["receiveCash"])
-        initiator.addFunds(offerData["receiveCash"])
+        # 2. Execute Asset Swap. Check both cash amounts BEFORE changing anything, so a trade
+        #    either happens completely or not at all (no silent half-trades).
+        if initiator.cashBalance < offerData["giveCash"] or target.cashBalance < offerData["receiveCash"]:
+            raise RuntimeError("Trade passed validation but a player cannot cover the cash.")
+        self._transferCash(initiator, target, offerData["giveCash"])
+        self._transferCash(target, initiator, offerData["receiveCash"])
 
         for propId in offerData["giveProps"]:
             initiator.removeProperty(propId)
@@ -255,7 +374,9 @@ class GameManager:
         """After moving, the active player's agent may open a negotiation (MVP: 2 players)."""
         if self.agents.get(player.playerName) is None:
             return
-        opponents = [p for p in self.players if p.playerName != player.playerName]
+        opponents = [p for p in self.activePlayers() if p.playerName != player.playerName]
+        if not opponents:
+            return  # nobody left to trade with
         if len(opponents) != 1:
             raise NotImplementedError("The negotiation MVP supports exactly 2 players.")
         opponent = opponents[0]

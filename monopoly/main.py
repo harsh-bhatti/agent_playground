@@ -37,15 +37,31 @@ def build_agents(args):
     }
 
 
+def describe_result(game):
+    """One line saying who won and why."""
+    reason = game.endReason
+    if reason == "bankruptcy":
+        out = ", ".join(f"{b['player']} went bankrupt on turn {b['turn']}" for b in game.bankruptcies)
+        return f"Winner: {game.winner} ({out})"
+    if reason == "turn_limit":
+        if game.winner:
+            return f"Winner: {game.winner} (highest net worth after {game.turnCount} turns)"
+        return f"Result: draw (equal net worth after {game.turnCount} turns)"
+    if reason == "stopped_early":
+        return "Result: no winner (game stopped early)"
+    return "Result: game not finished"
+
+
 def print_summary(game, stopped_early):
     print("\n" + "=" * 60)
     print("GAME SUMMARY" + ("  (stopped early)" if stopped_early else ""))
     print("=" * 60)
     print(f"Turns played: {game.turnCount}")
+    print(describe_result(game))
     for player in game.players:
         names = [game.board.getTile(i).name for i in player.ownedProperties] or ["none"]
         print(
-            f"{player.playerName}: cash ${player.cashBalance}, "
+            f"{player.playerName}{' (BANKRUPT)' if player.isBankrupt else ''}: cash ${player.cashBalance}, "
             f"net worth ${game.calculateEquity(player)}, "
             f"strategic value ${game.calculateStrategicValue(player)}"
         )
@@ -90,6 +106,7 @@ def save_log(game, args, stopped_early):
         "settings": {**vars(args), "model": llm_client.MODEL},
         "stopped_early": stopped_early,
         "turns_played": game.turnCount,
+        **game.gameResult(),  # winner, end_reason, bankruptcies
         "tokens_used": llm_client.total_tokens_used,
         "llm_calls": llm_client.total_calls,
         "buy_decisions": game.decisionLog,
@@ -98,6 +115,7 @@ def save_log(game, args, stopped_early):
         "final": {
             p.playerName: {
                 "cash": p.cashBalance,
+                "bankrupt": p.isBankrupt,
                 "properties": [game.board.getTile(i).name for i in p.ownedProperties],
                 "net_worth": game.calculateEquity(p),
                 "strategic_value": game.calculateStrategicValue(p),
@@ -141,8 +159,12 @@ def main():
     try:
         for _ in range(args.turns):
             game.executeTurn()
+            if game.isGameOver():
+                break  # someone went bankrupt
+        game.finishByTurnLimit()  # does nothing if the game already ended
     except llm_client.LLMError as error:
         stopped_early = True
+        game.markStoppedEarly()
         print(f"\n[STOPPED] The model could not be used: {error}")
 
     print_summary(game, stopped_early)

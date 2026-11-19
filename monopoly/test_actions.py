@@ -364,6 +364,173 @@ def test_full_mock_games_keep_ownership_consistent():
                 check_invariants(game)
 
 
+# ------------------------------------------------- bankruptcy and game end
+INCOME_TAX = 4  # board index of Income Tax ($200)
+
+
+def land_on(game, player_name, index):
+    """Put a player on Go and move them to `index`, as if they rolled that number."""
+    player = game.getPlayer(player_name)
+    player.boardPosition = 0
+    with quiet():
+        game.resolveMovement(player, index)
+    return player
+
+
+def test_tax_is_paid_when_affordable():
+    game = make_game()
+    a = land_on(game, A, INCOME_TAX)
+    assert a.cashBalance == 1300 and not a.isBankrupt and not game.isGameOver()
+    assert any("paid $200 Income Tax to the bank" in e for e in game.events)
+
+
+def test_unaffordable_tax_bankrupts_and_returns_properties_to_bank():
+    game = make_game()
+    game.getPlayer(A).cashBalance = 50
+    a = land_on(game, A, INCOME_TAX)
+    assert a.isBankrupt and a.cashBalance == 0 and a.ownedProperties == []
+    assert game.board.getTile(tile_id("Baltic Avenue")).ownerId is None  # back to the bank
+    assert game.getPlayer(B).cashBalance == 1500  # the bank got the $50, not B
+    assert game.winner == B and game.endReason == "bankruptcy"
+    assert not any("paid $200" in e for e in game.events)  # the old bug: "paid" with no payment
+    check_invariants(game)
+
+
+def test_unaffordable_rent_gives_creditor_cash_and_properties():
+    game = make_game()
+    game.getPlayer(A).cashBalance = 1  # Mediterranean rent is $2
+    a = land_on(game, A, tile_id("Mediterranean Avenue"))
+    b = game.getPlayer(B)
+    assert a.isBankrupt and a.cashBalance == 0
+    assert b.cashBalance == 1501
+    assert tile_id("Baltic Avenue") in b.ownedProperties
+    assert game.board.getTile(tile_id("Baltic Avenue")).ownerId == B
+    assert game.ownsFullSet(B, "Brown")
+    record = game.bankruptcies[0]
+    assert (record["player"], record["owed"], record["creditor"], record["cash_handed_over"]) == (A, 2, B, 1)
+    assert game.winner == B
+    check_invariants(game)
+
+
+def test_exact_payment_is_not_bankruptcy():
+    game = make_game()
+    game.getPlayer(A).cashBalance = 200
+    a = land_on(game, A, INCOME_TAX)
+    assert a.cashBalance == 0 and not a.isBankrupt and not game.isGameOver()
+
+
+def test_no_turns_after_game_over():
+    game = make_game()
+    game.getPlayer(A).cashBalance = 0
+    land_on(game, A, INCOME_TAX)
+    assert game.isGameOver()
+    turns, cash = game.turnCount, game.getPlayer(B).cashBalance
+    with quiet():
+        for _ in range(5):
+            game.executeTurn()
+    assert game.turnCount == turns and game.getPlayer(B).cashBalance == cash
+    game.finishByTurnLimit()  # must not overwrite the bankruptcy result
+    assert game.endReason == "bankruptcy" and game.winner == B
+
+
+def test_bankrupt_on_doubles_does_not_roll_again_and_is_skipped():
+    # Three players without agents, so the game continues after one is eliminated.
+    game = GameManager([A, B, "Agent C"])
+    game.getPlayer(A).cashBalance = 10
+    game.rollDice = lambda: (INCOME_TAX, True)  # A rolls doubles onto Income Tax
+    with quiet():
+        game.executeTurn()
+    assert game.getPlayer(A).isBankrupt and not game.isGameOver()
+    assert game.players[game.activePlayerIndex].playerName == B  # A did not roll again
+    game.rollDice = lambda: (2, False)
+    order = []
+    with quiet():
+        for _ in range(3):
+            order.append(game.players[game.activePlayerIndex].playerName)
+            game.executeTurn()
+    assert order == [B, "Agent C", B]  # A is skipped
+
+
+def test_turn_limit_winner_is_highest_net_worth():
+    game = make_game()
+    game.getPlayer(A).cashBalance += 10
+    with quiet():
+        game.finishByTurnLimit()
+    assert game.winner == A and game.endReason == "turn_limit"
+
+
+def test_turn_limit_tie_is_a_draw():
+    game = make_game()  # both have $1500 + one $60 property
+    with quiet():
+        game.finishByTurnLimit()
+    assert game.winner is None and game.endReason == "turn_limit"
+
+
+def test_cash_transfer_never_fails_silently():
+    game = make_game()
+    a, b = game.getPlayer(A), game.getPlayer(B)
+    try:
+        game._transferCash(a, b, 99999)
+        raise AssertionError("expected an error")
+    except RuntimeError:
+        pass
+    assert a.cashBalance == 1500 and b.cashBalance == 1500  # nothing moved
+
+
+def test_trade_with_bankrupt_player_is_refused():
+    game = make_game()
+    a, b = game.getPlayer(A), game.getPlayer(B)
+    b.isBankrupt = True
+    offer = {"giveCash": 10, "giveProps": [], "receiveCash": 0, "receiveProps": []}
+    assert "bankrupt" in game.validateTrade(a, b, offer)
+
+
+def test_result_is_in_summary_and_log_data():
+    import main
+
+    game = make_game()
+    game.getPlayer(A).cashBalance = 0
+    land_on(game, A, INCOME_TAX)
+    result = game.gameResult()
+    assert result["winner"] == B and result["end_reason"] == "bankruptcy"
+    assert result["bankruptcies"][0]["player"] == A
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        main.print_summary(game, stopped_early=False)
+    assert f"Winner: {B} ({A} went bankrupt on turn" in out.getvalue()
+    assert f"{A} (BANKRUPT)" in out.getvalue()
+
+
+def test_full_mock_games_end_with_a_consistent_result():
+    """Low starting cash makes bankruptcies likely. The books must stay consistent throughout.
+
+    Not every game goes bankrupt: on this small board, $200 for passing Go outpaces rent and
+    tax, so a player who survives the first laps usually never goes broke.
+    """
+    bankrupt_games = 0
+    for seed in range(20):
+        random.seed(seed)
+        game = GameManager([A, B], agents={A: RuleBasedAgent(A), B: RuleBasedAgent(B)})
+        for p in game.players:
+            p.cashBalance = 150
+        with quiet():
+            for _ in range(300):
+                game.executeTurn()
+                check_invariants(game)
+                if game.isGameOver():
+                    break
+            game.finishByTurnLimit()
+        assert game.isGameOver()
+        if game.endReason == "bankruptcy":
+            bankrupt_games += 1
+            survivors = game.activePlayers()
+            assert len(survivors) == 1 and survivors[0].playerName == game.winner
+            assert len(game.bankruptcies) == 1
+        else:
+            assert game.endReason == "turn_limit" and not game.bankruptcies
+    assert bankrupt_games >= 5, f"only {bankrupt_games} of 20 games had a bankruptcy"
+
+
 # ------------------------------------------------------------------ runner
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]

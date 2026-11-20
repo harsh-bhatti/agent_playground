@@ -20,7 +20,7 @@ class PropertyTile(Tile):
         if self.ownerId is None:
             gameManager.promptBuyDecision(player, self)
         elif self.ownerId != player.playerName and not self.isMortgaged:
-            rentDue = self.calculateRent()
+            rentDue = gameManager.getRent(self)
             gameManager.processRentPayment(player, self.ownerId, rentDue)
         elif self.ownerId == player.playerName:
             print(f"  -> INFO: {player.playerName} already owns this property.")

@@ -1,0 +1,971 @@
+{
+  "settings": {
+    "mode": "llm",
+    "players": 4,
+    "scenario": "none",
+    "turns": 8,
+    "max_negotiation_turns": 6,
+    "max_calls_per_turn": 12,
+    "max_reply_tokens": 1600,
+    "seed": 1,
+    "show_thoughts": true,
+    "persona_a": null,
+    "persona_b": null,
+    "base_url": "https://api-main.aiml.asu.edu/v1",
+    "model": "openai/gpt6_luna"
+  },
+  "stopped_early": false,
+  "turns_played": 8,
+  "winner": null,
+  "end_reason": "turn_limit",
+  "bankruptcies": [],
+  "tokens_used": 46402,
+  "prompt_tokens": 37106,
+  "completion_tokens": 9296,
+  "llm_calls": 25,
+  "empty_replies": 0,
+  "cut_off_replies": 0,
+  "buy_decisions": [
+    {
+      "game_turn": 3,
+      "speaker": "Agent C",
+      "decision": "buy",
+      "kind": "BUY",
+      "thought": "Reading Railroad is a strong asset with scalable rent, and I can comfortably afford it.",
+      "talk": "",
+      "deal": null,
+      "deal_text": null,
+      "target": null,
+      "format_ok": true,
+      "attempts": 1,
+      "fell_back": false,
+      "error": null,
+      "tokens": 1369,
+      "retry_errors": [],
+      "first_reply": null,
+      "capped": false,
+      "finish_reasons": [
+        "stop"
+      ],
+      "prompt_tokens": 1304,
+      "completion_tokens": 65
+    },
+    {
+      "game_turn": 4,
+      "speaker": "Agent D",
+      "decision": "buy",
+      "kind": "BUY",
+      "thought": "Buying Vermont Avenue is a low-cost investment and gives me a start toward the Light Blue set.",
+      "talk": null,
+      "deal": null,
+      "deal_text": null,
+      "target": null,
+      "format_ok": true,
+      "attempts": 1,
+      "fell_back": false,
+      "error": null,
+      "tokens": 1378,
+      "retry_errors": [],
+      "first_reply": null,
+      "capped": false,
+      "finish_reasons": [
+        "stop"
+      ],
+      "prompt_tokens": 1325,
+      "completion_tokens": 53
+    },
+    {
+      "game_turn": 7,
+      "speaker": "Agent B",
+      "decision": "buy",
+      "kind": "BUY",
+      "thought": "Connecticut Avenue is a reasonably priced property and contributes toward a Light Blue set.",
+      "talk": null,
+      "deal": null,
+      "deal_text": null,
+      "target": null,
+      "format_ok": true,
+      "attempts": 1,
+      "fell_back": false,
+      "error": null,
+      "tokens": 1402,
+      "retry_errors": [],
+      "first_reply": null,
+      "capped": false,
+      "finish_reasons": [
+        "stop"
+      ],
+      "prompt_tokens": 1345,
+      "completion_tokens": 57
+    }
+  ],
+  "negotiations": [
+    {
+      "game_turn": 3,
+      "initiator": "Agent C",
+      "responder": null,
+      "outcome": "declined",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 3,
+          "speaker": "Agent C",
+          "decision": "open",
+          "kind": "PASS",
+          "thought": "I should keep Reading Railroad; no opponent currently has a property I can trade for.",
+          "talk": "No trade this turn.",
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1555,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1356,
+          "completion_tokens": 199
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent C"
+      ]
+    },
+    {
+      "game_turn": 4,
+      "initiator": "Agent D",
+      "responder": "Agent C",
+      "outcome": "walk_away",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 4,
+          "speaker": "Agent D",
+          "decision": "open",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Reading Railroad could generate steady rent and potentially pair with Pennsylvania Railroad later, so I\u2019ll offer a modest premium over its price.",
+          "talk": "Would you sell Reading Railroad for $240? That gives you $40 above its listed price.",
+          "deal": {
+            "give_props": [],
+            "give_cash": 240,
+            "get_props": [
+              5
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[] give_cash=240 get=[Reading Railroad] get_cash=0",
+          "target": "Agent C",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2004,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1376,
+          "completion_tokens": 628
+        },
+        {
+          "game_turn": 4,
+          "speaker": "Agent C",
+          "decision": "respond",
+          "kind": "REJECT_DEAL",
+          "thought": "Reading Railroad provides ongoing rent and the chance to own both railroads, so $240 isn\u2019t enough to give it up this early.",
+          "talk": "I\u2019ll keep Reading Railroad for now. The railroad income and potential to complete the pair are worth more to me than $240.",
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2027,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1358,
+          "completion_tokens": 669
+        },
+        {
+          "game_turn": 4,
+          "speaker": "Agent D",
+          "decision": "respond",
+          "kind": "WALK_AWAY",
+          "thought": "Agent C has declined and values the railroad highly; I\u2019ll end this negotiation rather than raise my offer.",
+          "talk": "Understood. I\u2019ll leave it with you for now.",
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1739,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1531,
+          "completion_tokens": 208
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent D",
+        "Agent C"
+      ]
+    },
+    {
+      "game_turn": 5,
+      "initiator": "Agent D",
+      "responder": null,
+      "outcome": "declined",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 5,
+          "speaker": "Agent D",
+          "decision": "open",
+          "kind": "PASS",
+          "thought": "I should keep my cash and Vermont Avenue rather than make an unfavorable trade.",
+          "talk": "No trade this turn.",
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1884,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1376,
+          "completion_tokens": 508
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent D"
+      ]
+    },
+    {
+      "game_turn": 6,
+      "initiator": "Agent A",
+      "responder": "Agent C",
+      "outcome": "max_turns",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 6,
+          "speaker": "Agent A",
+          "decision": "open",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Reading Railroad is a useful income property, and a modest premium may persuade Agent C to trade it.",
+          "talk": "Would you sell Reading Railroad for $220? That gives you $20 more than its purchase price.",
+          "deal": {
+            "give_props": [],
+            "give_cash": 220,
+            "get_props": [
+              5
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[] give_cash=220 get=[Reading Railroad] get_cash=0",
+          "target": "Agent C",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2050,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1383,
+          "completion_tokens": 667
+        },
+        {
+          "game_turn": 6,
+          "speaker": "Agent C",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "$220 is only a small premium over the railroad\u2019s price. I\u2019ll counter at $260 to account for its ongoing rent value.",
+          "talk": "I\u2019d consider selling Reading Railroad for $260. That\u2019s a fairer price for its rental income.",
+          "deal": {
+            "give_props": [
+              5
+            ],
+            "give_cash": 0,
+            "get_props": [],
+            "get_cash": 260
+          },
+          "deal_text": "give=[Reading Railroad] give_cash=0 get=[] get_cash=260",
+          "target": "Agent A",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1694,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1359,
+          "completion_tokens": 335
+        },
+        {
+          "game_turn": 6,
+          "speaker": "Agent A",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Reading Railroad offers recurring rent and could become more valuable with a second railroad, but $260 is a steep premium.",
+          "talk": "I can raise my offer to $240. That\u2019s a solid premium while leaving me room to buy other properties.",
+          "deal": {
+            "give_props": [],
+            "give_cash": 240,
+            "get_props": [
+              5
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[] give_cash=240 get=[Reading Railroad] get_cash=0",
+          "target": "Agent C",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1965,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1544,
+          "completion_tokens": 421
+        },
+        {
+          "game_turn": 6,
+          "speaker": "Agent C",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Reading Railroad gives steady rent and could pair with Pennsylvania Railroad later. I\u2019ll hold onto it unless Agent A offers a larger premium.",
+          "talk": "$240 isn\u2019t enough for me to give up its rental income and the chance to own both railroads. I\u2019d sell for $280.",
+          "deal": {
+            "give_props": [
+              5
+            ],
+            "give_cash": 0,
+            "get_props": [],
+            "get_cash": 280
+          },
+          "deal_text": "give=[Reading Railroad] give_cash=0 get=[] get_cash=280",
+          "target": "Agent A",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1876,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1530,
+          "completion_tokens": 346
+        },
+        {
+          "game_turn": 6,
+          "speaker": "Agent A",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Paying $280 would put me $80 below the property\u2019s listed value in net worth, so I\u2019ll make one smaller counter.",
+          "talk": "I can offer $250, which is a substantial premium over the railroad\u2019s purchase price.",
+          "deal": {
+            "give_props": [],
+            "give_cash": 250,
+            "get_props": [
+              5
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[] give_cash=250 get=[Reading Railroad] get_cash=0",
+          "target": "Agent C",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2081,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1713,
+          "completion_tokens": 368
+        },
+        {
+          "game_turn": 6,
+          "speaker": "Agent C",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Reading Railroad has ongoing rental value and could pair with Pennsylvania Railroad, so $250 isn\u2019t enough to sell.",
+          "talk": "I\u2019ll stick with $280 for Reading Railroad.",
+          "deal": {
+            "give_props": [
+              5
+            ],
+            "give_cash": 0,
+            "get_props": [],
+            "get_cash": 280
+          },
+          "deal_text": "give=[Reading Railroad] give_cash=0 get=[] get_cash=280",
+          "target": "Agent A",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1939,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1703,
+          "completion_tokens": 236
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent A",
+        "Agent C"
+      ]
+    },
+    {
+      "game_turn": 7,
+      "initiator": "Agent B",
+      "responder": "Agent D",
+      "outcome": "max_turns",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 7,
+          "speaker": "Agent B",
+          "decision": "open",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Vermont Avenue would bring me closer to completing the Light Blue group, so I\u2019ll offer a modest premium while keeping Connecticut Avenue.",
+          "talk": "I\u2019ll offer you $110 for Vermont Avenue, a $10 premium over its price.",
+          "deal": {
+            "give_props": [],
+            "give_cash": 110,
+            "get_props": [
+              8
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[] give_cash=110 get=[Vermont Avenue] get_cash=0",
+          "target": "Agent D",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2330,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1396,
+          "completion_tokens": 934
+        },
+        {
+          "game_turn": 7,
+          "speaker": "Agent D",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "$110 is only a small premium, and Vermont Avenue could help me build the Light Blue set. I\u2019ll counter higher to make selling worthwhile.",
+          "talk": "I\u2019ll sell Vermont Avenue for $140. That gives you a strong position in Light Blue.",
+          "deal": {
+            "give_props": [
+              8
+            ],
+            "give_cash": 0,
+            "get_props": [],
+            "get_cash": 140
+          },
+          "deal_text": "give=[Vermont Avenue] give_cash=0 get=[] get_cash=140",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1807,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1377,
+          "completion_tokens": 430
+        },
+        {
+          "game_turn": 7,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Vermont would give me two of the three Light Blue properties, but paying $140 is too steep. I\u2019ll counter at $120.",
+          "talk": "I can offer $120 for Vermont Avenue, which is already a premium over its price.",
+          "deal": {
+            "give_props": [],
+            "give_cash": 120,
+            "get_props": [
+              8
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[] give_cash=120 get=[Vermont Avenue] get_cash=0",
+          "target": "Agent D",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1837,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1559,
+          "completion_tokens": 278
+        },
+        {
+          "game_turn": 7,
+          "speaker": "Agent D",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Vermont Avenue helps B build the Light Blue set, so $120 isn\u2019t enough compensation for giving it up.",
+          "talk": "I\u2019ll sell Vermont Avenue for $200, given its value toward completing your color group.",
+          "deal": {
+            "give_props": [
+              8
+            ],
+            "give_cash": 0,
+            "get_props": [],
+            "get_cash": 200
+          },
+          "deal_text": "give=[Vermont Avenue] give_cash=0 get=[] get_cash=200",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1859,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1544,
+          "completion_tokens": 315
+        },
+        {
+          "game_turn": 7,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "REJECT_DEAL",
+          "thought": "$200 is far too much for Vermont Avenue; it only gives me two of the three Light Blue properties.",
+          "talk": "I\u2019ll pass at that price.",
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1875,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1723,
+          "completion_tokens": 152
+        },
+        {
+          "game_turn": 7,
+          "speaker": "Agent D",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "$120 is a reasonable premium, but Vermont Avenue strengthens B\u2019s Light Blue holdings. I\u2019ll make one more moderate counter.",
+          "talk": "I can let Vermont Avenue go for $140.",
+          "deal": {
+            "give_props": [
+              8
+            ],
+            "give_cash": 0,
+            "get_props": [],
+            "get_cash": 140
+          },
+          "deal_text": "give=[Vermont Avenue] give_cash=0 get=[] get_cash=140",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2019,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1677,
+          "completion_tokens": 342
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent B",
+        "Agent D"
+      ]
+    },
+    {
+      "game_turn": 8,
+      "initiator": "Agent C",
+      "responder": "Agent B",
+      "outcome": "walk_away",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 8,
+          "speaker": "Agent C",
+          "decision": "open",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Connecticut Avenue has the higher rent, and offering its listed price preserves my net worth while converting cash into a rent-producing property.",
+          "talk": "Would you sell Connecticut Avenue for its $120 listed price? You\u2019d get the full value in cash.",
+          "deal": {
+            "give_props": [],
+            "give_cash": 120,
+            "get_props": [
+              9
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[] give_cash=120 get=[Connecticut Avenue] get_cash=0",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2406,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1396,
+          "completion_tokens": 1010
+        },
+        {
+          "game_turn": 8,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Selling Connecticut Avenue for its listed price gives no net-worth gain and would surrender a useful property, so I\u2019ll only sell at a premium.",
+          "talk": "I\u2019ll sell Connecticut Avenue for $160, but I\u2019d rather keep it than part with it at its listed price.",
+          "deal": {
+            "give_props": [
+              9
+            ],
+            "give_cash": 0,
+            "get_props": [],
+            "get_cash": 160
+          },
+          "deal_text": "give=[Connecticut Avenue] give_cash=0 get=[] get_cash=160",
+          "target": "Agent C",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1875,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1380,
+          "completion_tokens": 495
+        },
+        {
+          "game_turn": 8,
+          "speaker": "Agent C",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Paying above the $120 property value reduces my net worth, and this property won\u2019t complete my color group. I\u2019ll make a modest counter rather than accept $160.",
+          "talk": "I can offer $130, but $160 is more than I\u2019m willing to pay.",
+          "deal": {
+            "give_props": [],
+            "give_cash": 130,
+            "get_props": [
+              9
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[] give_cash=130 get=[Connecticut Avenue] get_cash=0",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1836,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1567,
+          "completion_tokens": 269
+        },
+        {
+          "game_turn": 8,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "$130 is only a $10 premium and Connecticut Avenue could help complete my Light Blue set, so I won\u2019t sell that cheaply.",
+          "talk": "I\u2019ll hold onto Connecticut Avenue unless you can offer $150.",
+          "deal": {
+            "give_props": [
+              9
+            ],
+            "give_cash": 0,
+            "get_props": [],
+            "get_cash": 150
+          },
+          "deal_text": "give=[Connecticut Avenue] give_cash=0 get=[] get_cash=150",
+          "target": "Agent C",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1745,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1551,
+          "completion_tokens": 194
+        },
+        {
+          "game_turn": 8,
+          "speaker": "Agent C",
+          "decision": "respond",
+          "kind": "WALK_AWAY",
+          "thought": "Connecticut Avenue doesn\u2019t complete a set, so paying a $30 premium over its listed price isn\u2019t worthwhile.",
+          "talk": "I\u2019ll pass at $150. Thanks for considering it.",
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1850,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1733,
+          "completion_tokens": 117
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent C",
+        "Agent B"
+      ]
+    }
+  ],
+  "events": [
+    "Turn 2: Agent B paid $200 Income Tax to the bank.",
+    "Turn 3: Agent C bought Reading Railroad for $200.",
+    "Turn 4: Agent D bought Vermont Avenue for $100.",
+    "Turn 7: Agent B bought Connecticut Avenue for $120.",
+    "Turn 8: Game over (turn_limit): no winner."
+  ],
+  "per_player": {
+    "Agent A": {
+      "deals": 0,
+      "trade_strategic_change": 0,
+      "trade_net_worth_change": 0,
+      "deals_worse_strategic": 0,
+      "deals_worse_net_worth": 0,
+      "deals_zero_strategic_gain": 0,
+      "negotiations_opened": 1,
+      "ideas_floated": 0,
+      "agent_calls": 3,
+      "capped": 0,
+      "fallbacks": 0,
+      "tokens": 6096,
+      "prompt_tokens": 4640,
+      "completion_tokens": 1456,
+      "cut_off_replies": 0,
+      "bankrupt": false,
+      "final_net_worth": 1500
+    },
+    "Agent B": {
+      "deals": 0,
+      "trade_strategic_change": 0,
+      "trade_net_worth_change": 0,
+      "deals_worse_strategic": 0,
+      "deals_worse_net_worth": 0,
+      "deals_zero_strategic_gain": 0,
+      "negotiations_opened": 1,
+      "ideas_floated": 0,
+      "agent_calls": 6,
+      "capped": 0,
+      "fallbacks": 0,
+      "tokens": 11064,
+      "prompt_tokens": 8954,
+      "completion_tokens": 2110,
+      "cut_off_replies": 0,
+      "bankrupt": false,
+      "final_net_worth": 1300
+    },
+    "Agent C": {
+      "deals": 0,
+      "trade_strategic_change": 0,
+      "trade_net_worth_change": 0,
+      "deals_worse_strategic": 0,
+      "deals_worse_net_worth": 0,
+      "deals_zero_strategic_gain": 0,
+      "negotiations_opened": 2,
+      "ideas_floated": 0,
+      "agent_calls": 9,
+      "capped": 0,
+      "fallbacks": 0,
+      "tokens": 16552,
+      "prompt_tokens": 13306,
+      "completion_tokens": 3246,
+      "cut_off_replies": 0,
+      "bankrupt": false,
+      "final_net_worth": 1500
+    },
+    "Agent D": {
+      "deals": 0,
+      "trade_strategic_change": 0,
+      "trade_net_worth_change": 0,
+      "deals_worse_strategic": 0,
+      "deals_worse_net_worth": 0,
+      "deals_zero_strategic_gain": 0,
+      "negotiations_opened": 2,
+      "ideas_floated": 0,
+      "agent_calls": 7,
+      "capped": 0,
+      "fallbacks": 0,
+      "tokens": 12690,
+      "prompt_tokens": 10206,
+      "completion_tokens": 2484,
+      "cut_off_replies": 0,
+      "bankrupt": false,
+      "final_net_worth": 1500
+    }
+  },
+  "final": {
+    "Agent A": {
+      "cash": 1500,
+      "bankrupt": false,
+      "properties": [],
+      "net_worth": 1500,
+      "strategic_value": 1500
+    },
+    "Agent B": {
+      "cash": 1180,
+      "bankrupt": false,
+      "properties": [
+        "Connecticut Avenue"
+      ],
+      "net_worth": 1300,
+      "strategic_value": 1300
+    },
+    "Agent C": {
+      "cash": 1300,
+      "bankrupt": false,
+      "properties": [
+        "Reading Railroad"
+      ],
+      "net_worth": 1500,
+      "strategic_value": 1500
+    },
+    "Agent D": {
+      "cash": 1400,
+      "bankrupt": false,
+      "properties": [
+        "Vermont Avenue"
+      ],
+      "net_worth": 1500,
+      "strategic_value": 1500
+    }
+  }
+}

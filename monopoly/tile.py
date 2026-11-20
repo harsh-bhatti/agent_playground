@@ -34,8 +34,8 @@ class TaxTile(Tile):
         self.taxAmount = taxAmount
 
     def onLand(self, player, gameManager):
-        # The engine charges the tax; if the player cannot pay, they go bankrupt.
-        gameManager.chargePlayer(player, self.taxAmount, None, self.name)
+        player.deductFunds(self.taxAmount)
+        print(f"  -> TAX: {player.playerName} paid ${self.taxAmount} for {self.name}.")
 
 class ActionTile(Tile):
     def onLand(self, player, gameManager):

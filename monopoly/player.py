@@ -6,6 +6,7 @@ class Player:
         self.ownedProperties = []
         self.inJail = False
         self.jailTurns = 0
+        self.isBankrupt = False  # set by GameManager.declareBankruptcy; a bankrupt player is out
 
     def addFunds(self, amount):
         self.cashBalance += amount

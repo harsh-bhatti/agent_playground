@@ -1,0 +1,354 @@
+{
+  "settings": {
+    "mode": "llm",
+    "turns": 12,
+    "max_negotiation_turns": 6,
+    "seed": 1,
+    "show_thoughts": true,
+    "persona_a": null,
+    "persona_b": null,
+    "model": "openai/gpt-oss-120b"
+  },
+  "stopped_early": false,
+  "turns_played": 12,
+  "tokens_used": 16625,
+  "llm_calls": 14,
+  "buy_decisions": [
+    {
+      "game_turn": 6,
+      "speaker": "Agent A",
+      "decision": "buy",
+      "kind": "BUY",
+      "thought": "Buying Pennsylvania Railroad for $200 increases my net worth and gives future rent income.",
+      "talk": "I'll buy the Pennsylvania Railroad.",
+      "deal": null,
+      "deal_text": null,
+      "format_ok": true,
+      "attempts": 1,
+      "fell_back": false,
+      "error": null,
+      "tokens": 1025,
+      "retry_errors": [],
+      "first_reply": null
+    }
+  ],
+  "negotiations": [
+    {
+      "game_turn": 6,
+      "initiator": "Agent A",
+      "responder": "Agent B",
+      "outcome": "declined",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 6,
+          "speaker": "Agent A",
+          "decision": "open",
+          "kind": "PASS",
+          "thought": "I have a railroad and cash; offering it for cash could boost my cash but I already have high cash. No clear benefit, so I'll pass.",
+          "talk": "I\u2019ll pass this turn.",
+          "deal": null,
+          "deal_text": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1111,
+          "retry_errors": [],
+          "first_reply": null
+        }
+      ]
+    },
+    {
+      "game_turn": 7,
+      "initiator": "Agent B",
+      "responder": "Agent A",
+      "outcome": "deal",
+      "proposer": "Agent B",
+      "deal_text": "give=[] give_cash=250 get=[Pennsylvania Railroad] get_cash=0",
+      "trade": {
+        "initiator": "Agent B",
+        "target": "Agent A",
+        "initiator_equity_delta": -50,
+        "target_equity_delta": 50,
+        "initiator_strategic_delta": -50,
+        "target_strategic_delta": 50
+      },
+      "turns": [
+        {
+          "game_turn": 7,
+          "speaker": "Agent B",
+          "decision": "open",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Acquiring Pennsylvania Railroad gives me a valuable asset and moves me toward a railroad monopoly; offering $250 is a fair price and improves my net worth.",
+          "talk": "I'll buy Pennsylvania Railroad from you for $250.",
+          "deal": {
+            "give_props": [],
+            "give_cash": 250,
+            "get_props": [
+              15
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[] give_cash=250 get=[Pennsylvania Railroad] get_cash=0",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1310,
+          "retry_errors": [],
+          "first_reply": null
+        },
+        {
+          "game_turn": 7,
+          "speaker": "Agent A",
+          "decision": "respond",
+          "kind": "ACCEPT_DEAL",
+          "thought": "Selling Pennsylvania Railroad for $250 increases my cash and net worth, and I have no other railroads, so it's a good deal.",
+          "talk": "Deal accepted.",
+          "deal": null,
+          "deal_text": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1137,
+          "retry_errors": [],
+          "first_reply": null
+        }
+      ]
+    },
+    {
+      "game_turn": 8,
+      "initiator": "Agent A",
+      "responder": "Agent B",
+      "outcome": "declined",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 8,
+          "speaker": "Agent A",
+          "decision": "open",
+          "kind": "PASS",
+          "thought": "I have no immediate way to acquire a property, so I will pass this turn and wait for a better opportunity.",
+          "talk": "I\u2019ll pass for now.",
+          "deal": null,
+          "deal_text": null,
+          "format_ok": true,
+          "attempts": 2,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2510,
+          "retry_errors": [
+            "[BUY] is not allowed right now. You can only buy a property right after landing on it. To get a property the other player owns, propose a trade with [SUBMIT_DEAL]. Allowed tags: [SUBMIT_DEAL], [PASS]."
+          ],
+          "first_reply": "Thought: I have plenty of cash and no properties; buying the unowned Reading Railroad will give me a rail asset and increase net worth.\nTalk: I'll purchase the Reading Railroad.\nAction: [BUY]"
+        }
+      ]
+    },
+    {
+      "game_turn": 9,
+      "initiator": "Agent A",
+      "responder": "Agent B",
+      "outcome": "declined",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 9,
+          "speaker": "Agent A",
+          "decision": "open",
+          "kind": "PASS",
+          "thought": "I have ample cash and already own the Pennsylvania Railroad; there\u2019s no immediate benefit to trading it, so I\u2019ll simply pass this turn.",
+          "talk": "I\u2019ll pass for now.",
+          "deal": null,
+          "deal_text": null,
+          "format_ok": true,
+          "attempts": 2,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2455,
+          "retry_errors": [
+            "[BUY] is not allowed right now. You can only buy a property right after landing on it. To get a property the other player owns, propose a trade with [SUBMIT_DEAL]. Allowed tags: [SUBMIT_DEAL], [PASS]."
+          ],
+          "first_reply": "Thought: I have plenty of cash and own the Pennsylvania Railroad, while the Reading Railroad is unowned. Buying it will increase my net worth and future rent income.\nTalk: I'll buy the Reading Railroad.\nAction: [BUY]"
+        }
+      ]
+    },
+    {
+      "game_turn": 10,
+      "initiator": "Agent B",
+      "responder": "Agent A",
+      "outcome": "deal",
+      "proposer": "Agent B",
+      "deal_text": "give=[Pennsylvania Railroad] give_cash=0 get=[] get_cash=250",
+      "trade": {
+        "initiator": "Agent B",
+        "target": "Agent A",
+        "initiator_equity_delta": 50,
+        "target_equity_delta": -50,
+        "initiator_strategic_delta": 50,
+        "target_strategic_delta": -50
+      },
+      "turns": [
+        {
+          "game_turn": 10,
+          "speaker": "Agent B",
+          "decision": "open",
+          "kind": "SUBMIT_DEAL",
+          "thought": "I own the only Railroad and have plenty of cash; selling it for a good cash boost will increase my net worth more than keeping it.",
+          "talk": "I'd like to sell Pennsylvania Railroad for $250 cash.",
+          "deal": {
+            "give_props": [
+              15
+            ],
+            "give_cash": 0,
+            "get_props": [],
+            "get_cash": 250
+          },
+          "deal_text": "give=[Pennsylvania Railroad] give_cash=0 get=[] get_cash=250",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1141,
+          "retry_errors": [],
+          "first_reply": null
+        },
+        {
+          "game_turn": 10,
+          "speaker": "Agent A",
+          "decision": "respond",
+          "kind": "ACCEPT_DEAL",
+          "thought": "Accepting the railroad for $250 gives me a valuable asset and leaves me ahead in net worth.",
+          "talk": "Deal accepted.",
+          "deal": null,
+          "deal_text": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1242,
+          "retry_errors": [],
+          "first_reply": null
+        }
+      ]
+    },
+    {
+      "game_turn": 11,
+      "initiator": "Agent A",
+      "responder": "Agent B",
+      "outcome": "declined",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 11,
+          "speaker": "Agent A",
+          "decision": "open",
+          "kind": "PASS",
+          "thought": "I have cash and one railroad; the opponent currently holds no properties. Since there\u2019s nothing valuable for them to receive, I\u2019ll just pass this turn and wait for a better opportunity.",
+          "talk": "I\u2019ll pass for now.",
+          "deal": null,
+          "deal_text": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1203,
+          "retry_errors": [],
+          "first_reply": null
+        }
+      ]
+    },
+    {
+      "game_turn": 12,
+      "initiator": "Agent B",
+      "responder": "Agent A",
+      "outcome": "deal",
+      "proposer": "Agent B",
+      "deal_text": "give=[] give_cash=250 get=[Pennsylvania Railroad] get_cash=0",
+      "trade": {
+        "initiator": "Agent B",
+        "target": "Agent A",
+        "initiator_equity_delta": -50,
+        "target_equity_delta": 50,
+        "initiator_strategic_delta": -50,
+        "target_strategic_delta": 50
+      },
+      "turns": [
+        {
+          "game_turn": 12,
+          "speaker": "Agent B",
+          "decision": "open",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Agent A owns Pennsylvania Railroad, which is valuable. I can try to buy it for cash to gain steady rent and improve my net worth.",
+          "talk": "I'd like to purchase Pennsylvania Railroad from you for $250.",
+          "deal": {
+            "give_props": [],
+            "give_cash": 250,
+            "get_props": [
+              15
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[] give_cash=250 get=[Pennsylvania Railroad] get_cash=0",
+          "format_ok": true,
+          "attempts": 2,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2398,
+          "retry_errors": [
+            "Agent A does not own Reading Railroad, so it cannot be received. get=[...] must list properties Agent A owns."
+          ],
+          "first_reply": "Thought: I have cash and no properties; acquiring a railroad gives rent income and blocks A. I\u2019ll offer to buy the unowned Reading Railroad for its price.\nTalk: I\u2019ll buy the Reading Railroad from the bank for $200.\nAction: [SUBMIT_DEAL] give=[] give_cash=200 get=[Reading Railroad] get_cash=0"
+        },
+        {
+          "game_turn": 12,
+          "speaker": "Agent A",
+          "decision": "respond",
+          "kind": "ACCEPT_DEAL",
+          "thought": "Selling the railroad gives me $250 cash, improving my liquidity for future purchases; it's a fair price.",
+          "talk": "Deal accepted.",
+          "deal": null,
+          "deal_text": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1093,
+          "retry_errors": [],
+          "first_reply": null
+        }
+      ]
+    }
+  ],
+  "events": [
+    "Turn 6: Agent A bought Pennsylvania Railroad for $200.",
+    "Turn 7: Agent B and Agent A completed a trade.",
+    "Turn 10: Agent B and Agent A completed a trade.",
+    "Turn 12: Agent B and Agent A completed a trade."
+  ],
+  "final": {
+    "Agent A": {
+      "cash": 1450,
+      "properties": [],
+      "net_worth": 1450,
+      "strategic_value": 1450
+    },
+    "Agent B": {
+      "cash": 1050,
+      "properties": [
+        "Pennsylvania Railroad"
+      ],
+      "net_worth": 1250,
+      "strategic_value": 1250
+    }
+  }
+}

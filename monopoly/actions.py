@@ -8,26 +8,73 @@ The reply format is borrowed from last year's negotiation project:
     Talk: what you say to the other player
     Action: [TAG] ...
 
-Deal terms are always written from the point of view of the player who wrote them:
+Deal terms are always written from the point of view of the player who wrote them.
+to=[...] names the player the offer is for (needed when opening a negotiation in a game
+with more than 2 players; the engine checks it):
 
-    [SUBMIT_DEAL] give=[Reading Railroad] give_cash=50 get=[Baltic Avenue] get_cash=0
+    [SUBMIT_DEAL] to=[Agent C] give=[Reading Railroad] give_cash=50 get=[Baltic Avenue] get_cash=0
+
+An idea floated to every player, the reply that declines it, and picking one reply:
+
+    [FLOAT_IDEA] want=[Baltic Avenue] give=[] give_cash=90 get_cash=0
+    [IGNORE]
+    [ACCEPT_DEAL] from=[Agent C]
 """
 import re
 from dataclasses import dataclass
 
 from tile import PropertyTile
 
-ALL_TAGS = ("SUBMIT_DEAL", "ACCEPT_DEAL", "REJECT_DEAL", "WALK_AWAY", "BUY", "PASS")
+ALL_TAGS = ("SUBMIT_DEAL", "ACCEPT_DEAL", "REJECT_DEAL", "WALK_AWAY", "BUY", "PASS",
+            "FLOAT_IDEA", "IGNORE")
 _TAG_RE = re.compile(r"\[(" + "|".join(ALL_TAGS) + r")\]", re.IGNORECASE)
 
 # Which tags are allowed for each kind of decision.
 BUY_ACTIONS = ("BUY", "PASS")
-OPEN_ACTIONS = ("SUBMIT_DEAL", "PASS")
+OPEN_ACTIONS = ("SUBMIT_DEAL", "FLOAT_IDEA", "PASS")
 RESPOND_ACTIONS = ("SUBMIT_DEAL", "ACCEPT_DEAL", "REJECT_DEAL", "WALK_AWAY")
+IDEA_REPLY_ACTIONS = ("SUBMIT_DEAL", "IGNORE")  # answering an idea floated to everyone
+CHOOSE_ACTIONS = ("ACCEPT_DEAL", "SUBMIT_DEAL", "WALK_AWAY")  # picking among offers for your idea
+
+# Recipient used for properties promised in an idea floated to every player (see GameManager locks).
+EVERYONE = "everyone"
 
 DEAL_FORMAT_HINT = (
-    "Use exactly: [SUBMIT_DEAL] give=[Property, Property] give_cash=N get=[Property] get_cash=M"
+    "Use exactly: [SUBMIT_DEAL] to=[Player] give=[Property, Property] give_cash=N "
+    "get=[Property] get_cash=M"
 )
+IDEA_FORMAT_HINT = (
+    "Use exactly: [FLOAT_IDEA] want=[Property] give=[Property] give_cash=N get_cash=M"
+)
+
+
+def _name_re(key):
+    # key=[Agent C], or the forgiving form key=Agent C (ending before give/get/want or line end).
+    return re.compile(
+        rf"\b{key}\s*=\s*(?:\[([^\]]*)\]|([^\[\]\n]+?)(?=\s+(?:give|get|want)\b|\s*$))",
+        re.IGNORECASE | re.MULTILINE,
+    )
+
+
+_NAME_RE = {"to": _name_re("to"), "from": _name_re("from")}
+
+
+def _parse_name(text, key):
+    match = _NAME_RE[key].search(text or "")
+    if not match:
+        return None
+    name = (match.group(1) if match.group(1) is not None else match.group(2)).strip(" \"'")
+    return name or None
+
+
+def parse_target(text):
+    """The player name written in to=[...], or None if there is no to=. Not checked here."""
+    return _parse_name(text, "to")
+
+
+def parse_source(text):
+    """The player name written in from=[...] (on [ACCEPT_DEAL]), or None. Not checked here."""
+    return _parse_name(text, "from")
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +237,21 @@ def parse_deal(text, board):
     return deal, None
 
 
+def parse_idea(text, board):
+    """Read a [FLOAT_IDEA]. Returns (Deal, None) or (None, error).
+
+    The Deal is from the proposer's point of view: get_props = the wanted properties (they
+    may belong to different players), give_* = what the proposer would hand over.
+    want=[...] is the documented name; get=[...] is accepted too.
+    """
+    deal, error = parse_deal(re.sub(r"\bwant\s*=", "get=", text, flags=re.IGNORECASE), board)
+    if error and error.startswith("Could not read"):
+        return None, "Could not read the idea. " + IDEA_FORMAT_HINT
+    if error and error.startswith("The deal is empty"):
+        return None, "The idea is empty. Say what you want (want=[...] or get_cash) and what you would give."
+    return deal, error
+
+
 # ---------------------------------------------------------------------------
 # Actions
 # ---------------------------------------------------------------------------
@@ -198,6 +260,8 @@ class ParsedAction:
     kind: str | None = None  # one of ALL_TAGS, or None if the reply was unusable
     deal: Deal | None = None
     error: str | None = None  # plain-English problem, sent back to the model for a retry
+    target: str | None = None  # the name written in to=[...] (SUBMIT_DEAL only), unchecked
+    source: str | None = None  # the name written in from=[...] (ACCEPT_DEAL only), unchecked
 
 
 def parse_action(parsed, allowed, board):
@@ -240,5 +304,12 @@ def parse_action(parsed, allowed, board):
         deal, error = parse_deal(text, board)
         if error:
             return ParsedAction(error=error)
+        return ParsedAction(kind=kind, deal=deal, target=parse_target(text))
+    if kind == "FLOAT_IDEA":
+        deal, error = parse_idea(text, board)
+        if error:
+            return ParsedAction(error=error)
         return ParsedAction(kind=kind, deal=deal)
+    if kind == "ACCEPT_DEAL":
+        return ParsedAction(kind=kind, source=parse_source(text))
     return ParsedAction(kind=kind)

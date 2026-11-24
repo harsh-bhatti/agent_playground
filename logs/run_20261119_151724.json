@@ -1,0 +1,1022 @@
+{
+  "settings": {
+    "mode": "llm",
+    "players": 2,
+    "scenario": "swap",
+    "turns": 8,
+    "max_negotiation_turns": 6,
+    "max_calls_per_turn": 12,
+    "max_reply_tokens": 800,
+    "seed": 1,
+    "show_thoughts": true,
+    "persona_a": null,
+    "persona_b": null,
+    "base_url": "https://api-main.aiml.asu.edu/v1",
+    "model": "openai/gpt6_luna"
+  },
+  "stopped_early": false,
+  "turns_played": 8,
+  "winner": "Agent A",
+  "end_reason": "turn_limit",
+  "bankruptcies": [],
+  "tokens_used": 59620,
+  "prompt_tokens": 44232,
+  "completion_tokens": 15388,
+  "llm_calls": 30,
+  "empty_replies": 5,
+  "cut_off_replies": 0,
+  "buy_decisions": [
+    {
+      "game_turn": 6,
+      "speaker": "Agent A",
+      "decision": "buy",
+      "kind": "BUY",
+      "thought": "Buying the railroad adds a valuable asset and keeps it from Agent B.",
+      "talk": "",
+      "deal": null,
+      "deal_text": null,
+      "target": null,
+      "format_ok": true,
+      "attempts": 1,
+      "fell_back": false,
+      "error": null,
+      "tokens": 1410,
+      "retry_errors": [],
+      "first_reply": null,
+      "capped": false,
+      "finish_reasons": [
+        "stop"
+      ],
+      "prompt_tokens": 1319,
+      "completion_tokens": 91
+    }
+  ],
+  "negotiations": [
+    {
+      "game_turn": 1,
+      "initiator": "Agent A",
+      "responder": "Agent B",
+      "outcome": "max_turns",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 1,
+          "speaker": "Agent A",
+          "decision": "open",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Trading Baltic Avenue and $40 for Connecticut Avenue completes my Light Blue set and gives B the Brown set.",
+          "talk": "I\u2019ll trade you Baltic Avenue plus $40 for Connecticut Avenue, so we both complete a color group.",
+          "deal": {
+            "give_props": [
+              3
+            ],
+            "give_cash": 40,
+            "get_props": [
+              9
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[Baltic Avenue] give_cash=40 get=[Connecticut Avenue] get_cash=0",
+          "target": "Agent B",
+          "format_ok": false,
+          "attempts": 2,
+          "fell_back": false,
+          "error": null,
+          "tokens": 3943,
+          "retry_errors": [
+            "I could not find an Action line. Reply with Thought, Talk, then 'Action: [TAG]'. Allowed tags: [SUBMIT_DEAL], [FLOAT_IDEA], [PASS]."
+          ],
+          "first_reply": "Thought: Completing the Light Blue set gives me a strong rent advantage. A straight swap would also complete B\u2019s Brown",
+          "capped": false,
+          "finish_reasons": [
+            "stop",
+            "stop"
+          ],
+          "prompt_tokens": 2724,
+          "completion_tokens": 1219
+        },
+        {
+          "game_turn": 1,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Trading Connecticut for Baltic completes both color groups, but Agent A\u2019s Light Blue set has substantially higher rents. I\u2019ll counter for enough cash to offset Connecticut\u2019s higher price.",
+          "talk": "I\u2019m open to completing both sets, but Connecticut is worth more than Baltic. I\u2019ll trade it for Baltic plus $100.",
+          "deal": {
+            "give_props": [
+              9
+            ],
+            "give_cash": 0,
+            "get_props": [
+              3
+            ],
+            "get_cash": 100
+          },
+          "deal_text": "give=[Connecticut Avenue] give_cash=0 get=[Baltic Avenue] get_cash=100",
+          "target": "Agent A",
+          "format_ok": false,
+          "attempts": 2,
+          "fell_back": false,
+          "error": null,
+          "tokens": 4105,
+          "retry_errors": [
+            "Your reply was empty. Reply with Thought, Talk, then 'Action: [TAG]'. Allowed tags: [SUBMIT_DEAL], [ACCEPT_DEAL], [REJECT_DEAL], [WALK_AWAY]."
+          ],
+          "first_reply": "",
+          "capped": false,
+          "finish_reasons": [
+            "stop",
+            "stop"
+          ],
+          "prompt_tokens": 2699,
+          "completion_tokens": 1406
+        },
+        {
+          "game_turn": 1,
+          "speaker": "Agent A",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Connecticut completes my Light Blue set, but paying $100 on top of Baltic overvalues the trade. I\u2019ll hold to my $40 premium.",
+          "talk": "I can offer Baltic Avenue plus $40 for Connecticut Avenue; that gives us both completed color groups.",
+          "deal": {
+            "give_props": [
+              3
+            ],
+            "give_cash": 40,
+            "get_props": [
+              9
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[Baltic Avenue] give_cash=40 get=[Connecticut Avenue] get_cash=0",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2009,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1583,
+          "completion_tokens": 426
+        },
+        {
+          "game_turn": 1,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Completing Brown is valuable, but Agent A\u2019s completed Light Blue set would generate much higher doubled rents. I should require more than $40 to compensate for Connecticut\u2019s higher value and the stronger set I\u2019m enabling.",
+          "talk": "I\u2019ll trade Connecticut for Baltic only if you add $100.",
+          "deal": {
+            "give_props": [
+              9
+            ],
+            "give_cash": 0,
+            "get_props": [
+              3
+            ],
+            "get_cash": 100
+          },
+          "deal_text": "give=[Connecticut Avenue] give_cash=0 get=[Baltic Avenue] get_cash=100",
+          "target": "Agent A",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1849,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1576,
+          "completion_tokens": 273
+        },
+        {
+          "game_turn": 1,
+          "speaker": "Agent A",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Connecticut\u2019s higher price and the Light Blue monopoly are valuable, but Baltic also completes B\u2019s Brown set. I\u2019ll counter with the $60 difference in property prices.",
+          "talk": "I can add $60 to Baltic Avenue for Connecticut Avenue, which accounts for Connecticut\u2019s higher purchase price while giving us both complete sets.",
+          "deal": {
+            "give_props": [
+              3
+            ],
+            "give_cash": 60,
+            "get_props": [
+              9
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[Baltic Avenue] give_cash=60 get=[Connecticut Avenue] get_cash=0",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1963,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1753,
+          "completion_tokens": 210
+        },
+        {
+          "game_turn": 1,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "The $60 payment only balances the properties\u2019 listed prices. Completing Light Blue gives Agent A a much stronger rent set than my completed Brown set, so I need a larger premium.",
+          "talk": "I\u2019ll trade Connecticut for Baltic plus $120, reflecting the value of the stronger Light Blue monopoly.",
+          "deal": {
+            "give_props": [
+              9
+            ],
+            "give_cash": 0,
+            "get_props": [
+              3
+            ],
+            "get_cash": 120
+          },
+          "deal_text": "give=[Connecticut Avenue] give_cash=0 get=[Baltic Avenue] get_cash=120",
+          "target": "Agent A",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2207,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1766,
+          "completion_tokens": 441
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent A",
+        "Agent B"
+      ]
+    },
+    {
+      "game_turn": 2,
+      "initiator": "Agent B",
+      "responder": "Agent A",
+      "outcome": "max_turns",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 2,
+          "speaker": "Agent B",
+          "decision": "open",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Acquiring Baltic Avenue would complete my Brown set and prevent Agent A from completing it. I can offer a premium while keeping Mediterranean Avenue.",
+          "talk": "I\u2019ll offer $100 for Baltic Avenue so I can complete the Brown set.",
+          "deal": {
+            "give_props": [],
+            "give_cash": 100,
+            "get_props": [
+              3
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[] give_cash=100 get=[Baltic Avenue] get_cash=0",
+          "target": "Agent A",
+          "format_ok": false,
+          "attempts": 2,
+          "fell_back": false,
+          "error": null,
+          "tokens": 4122,
+          "retry_errors": [
+            "Your reply was empty. Reply with Thought, Talk, then 'Action: [TAG]'. Allowed tags: [SUBMIT_DEAL], [FLOAT_IDEA], [PASS]."
+          ],
+          "first_reply": "",
+          "capped": false,
+          "finish_reasons": [
+            "stop",
+            "stop"
+          ],
+          "prompt_tokens": 2737,
+          "completion_tokens": 1385
+        },
+        {
+          "game_turn": 2,
+          "speaker": "Agent A",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Selling Baltic Avenue would give Agent B a Brown monopoly. I\u2019ll counter by offering it for Connecticut Avenue, which completes my Light Blue set.",
+          "talk": "I can trade Baltic Avenue for Connecticut Avenue. That gives us each a complete color group.",
+          "deal": {
+            "give_props": [
+              3
+            ],
+            "give_cash": 0,
+            "get_props": [
+              9
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[Baltic Avenue] give_cash=0 get=[Connecticut Avenue] get_cash=0",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1785,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1319,
+          "completion_tokens": 466
+        },
+        {
+          "game_turn": 2,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Completing Brown is valuable, but Connecticut is worth $60 more and gives Agent A a much stronger Light Blue set. I\u2019ll counter for cash compensation.",
+          "talk": "I\u2019m interested, but Connecticut is worth more and completing Light Blue is a strong benefit for you. Add $100 and we have a deal.",
+          "deal": {
+            "give_props": [
+              9
+            ],
+            "give_cash": 0,
+            "get_props": [
+              3
+            ],
+            "get_cash": 100
+          },
+          "deal_text": "give=[Connecticut Avenue] give_cash=0 get=[Baltic Avenue] get_cash=100",
+          "target": "Agent A",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2031,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1564,
+          "completion_tokens": 467
+        },
+        {
+          "game_turn": 2,
+          "speaker": "Agent A",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Connecticut Avenue is worth $60 more than Baltic Avenue, so adding $100 would make this a poor deal for me. I\u2019ll hold firm on the property swap without cash.",
+          "talk": "I\u2019ll trade Baltic Avenue for Connecticut Avenue, but I won\u2019t add cash.",
+          "deal": {
+            "give_props": [
+              3
+            ],
+            "give_cash": 0,
+            "get_props": [
+              9
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[Baltic Avenue] give_cash=0 get=[Connecticut Avenue] get_cash=0",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1905,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1502,
+          "completion_tokens": 403
+        },
+        {
+          "game_turn": 2,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "REJECT_DEAL",
+          "thought": "This trade gives Agent A the Light Blue monopoly, whose doubled rents are much stronger than the Brown monopoly I would gain, and Connecticut Avenue is also more valuable.",
+          "talk": "I can\u2019t trade Connecticut Avenue for Baltic Avenue without compensation.",
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1996,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1739,
+          "completion_tokens": 257
+        },
+        {
+          "game_turn": 2,
+          "speaker": "Agent A",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Connecticut Avenue completes my Light Blue set, so it\u2019s worth paying some cash, but not the $100 Agent B requested.",
+          "talk": "I\u2019ll add $40 to Baltic Avenue for Connecticut Avenue. That\u2019s my best offer.",
+          "deal": {
+            "give_props": [
+              3
+            ],
+            "give_cash": 40,
+            "get_props": [
+              9
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[Baltic Avenue] give_cash=40 get=[Connecticut Avenue] get_cash=0",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2205,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1655,
+          "completion_tokens": 550
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent B",
+        "Agent A"
+      ]
+    },
+    {
+      "game_turn": 3,
+      "initiator": "Agent A",
+      "responder": "Agent B",
+      "outcome": "deal",
+      "proposer": "Agent A",
+      "deal_text": "give=[Baltic Avenue] give_cash=100 get=[Connecticut Avenue] get_cash=0",
+      "trade": {
+        "initiator": "Agent A",
+        "target": "Agent B",
+        "initiator_equity_delta": -40,
+        "target_equity_delta": 40,
+        "initiator_strategic_delta": 152,
+        "target_strategic_delta": 112
+      },
+      "turns": [
+        {
+          "game_turn": 3,
+          "speaker": "Agent A",
+          "decision": "open",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Trading Baltic Avenue for Connecticut Avenue gives me the Light Blue monopoly while completing Agent B\u2019s Brown set, with no loss in property value.",
+          "talk": "Would you trade Connecticut Avenue for Baltic Avenue? You\u2019d complete the Brown set, and I\u2019d complete Light Blue.",
+          "deal": {
+            "give_props": [
+              3
+            ],
+            "give_cash": 0,
+            "get_props": [
+              9
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[Baltic Avenue] give_cash=0 get=[Connecticut Avenue] get_cash=0",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1858,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1334,
+          "completion_tokens": 524
+        },
+        {
+          "game_turn": 3,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Completing Brown is useful, but Connecticut Avenue is worth twice as much as Baltic, and this trade would also give Agent A the Light Blue monopoly. I\u2019ll ask for cash to balance the value and the monopoly advantage.",
+          "talk": "I\u2019ll trade Connecticut Avenue for Baltic Avenue, but since Connecticut is worth more and this completes your Light Blue set, I need $100 as well.",
+          "deal": {
+            "give_props": [
+              9
+            ],
+            "give_cash": 0,
+            "get_props": [
+              3
+            ],
+            "get_cash": 100
+          },
+          "deal_text": "give=[Connecticut Avenue] give_cash=0 get=[Baltic Avenue] get_cash=100",
+          "target": "Agent A",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1746,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1327,
+          "completion_tokens": 419
+        },
+        {
+          "game_turn": 3,
+          "speaker": "Agent A",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Both of us complete a color set in this trade. $60 cash matches the difference in property prices; $100 would overpay.",
+          "talk": "I can trade Baltic Avenue for Connecticut Avenue plus $60. That fairly accounts for Connecticut\u2019s higher price, while we each complete a set.",
+          "deal": {
+            "give_props": [
+              3
+            ],
+            "give_cash": 60,
+            "get_props": [
+              9
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[Baltic Avenue] give_cash=60 get=[Connecticut Avenue] get_cash=0",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2054,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1522,
+          "completion_tokens": 532
+        },
+        {
+          "game_turn": 3,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Agent A\u2019s offer compensates for the price difference, but completing Light Blue gives them a much stronger rent advantage than the Brown set gives me. I\u2019ll counter for a premium.",
+          "talk": "The $60 covers the price difference, but your Light Blue monopoly is more valuable. I\u2019ll do the trade for Baltic Avenue plus $150.",
+          "deal": {
+            "give_props": [
+              9
+            ],
+            "give_cash": 0,
+            "get_props": [
+              3
+            ],
+            "get_cash": 150
+          },
+          "deal_text": "give=[Connecticut Avenue] give_cash=0 get=[Baltic Avenue] get_cash=150",
+          "target": "Agent A",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2066,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1536,
+          "completion_tokens": 530
+        },
+        {
+          "game_turn": 3,
+          "speaker": "Agent A",
+          "decision": "respond",
+          "kind": "SUBMIT_DEAL",
+          "thought": "The Light Blue monopoly is valuable, but paying $150 on top of Baltic Avenue is too steep. I\u2019ll raise my offer modestly while keeping the trade favorable.",
+          "talk": "I\u2019ll add $100 to Baltic Avenue for Connecticut Avenue. That gives you more than the property-price difference while letting us both complete our sets.",
+          "deal": {
+            "give_props": [
+              3
+            ],
+            "give_cash": 100,
+            "get_props": [
+              9
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[Baltic Avenue] give_cash=100 get=[Connecticut Avenue] get_cash=0",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2030,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1709,
+          "completion_tokens": 321
+        },
+        {
+          "game_turn": 3,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "ACCEPT_DEAL",
+          "thought": "The deal gives me the Brown monopoly and $100, more than compensating for Connecticut\u2019s higher price. Agent A\u2019s Light Blue monopoly is stronger, but this is a favorable exchange overall.",
+          "talk": "Agreed. We\u2019ll both complete a set, and the $100 makes the trade worthwhile for me.",
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2502,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1738,
+          "completion_tokens": 764
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent A",
+        "Agent B"
+      ]
+    },
+    {
+      "game_turn": 4,
+      "initiator": "Agent B",
+      "responder": null,
+      "outcome": "declined",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 4,
+          "speaker": "Agent B",
+          "decision": "open",
+          "kind": "PASS",
+          "thought": "I should keep my Brown monopoly rather than trade away part of its doubled-rent set.",
+          "talk": "I\u2019ll hold onto my Brown properties for now.",
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1691,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1353,
+          "completion_tokens": 338
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent B"
+      ]
+    },
+    {
+      "game_turn": 5,
+      "initiator": "Agent B",
+      "responder": null,
+      "outcome": "declined",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 5,
+          "speaker": "Agent B",
+          "decision": "open",
+          "kind": "PASS",
+          "thought": "I already have the Brown monopoly, so I\u2019ll keep it rather than risk a trade that breaks the set.",
+          "talk": "I\u2019ll hold onto my properties for now.",
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": false,
+          "attempts": 2,
+          "fell_back": false,
+          "error": null,
+          "tokens": 4047,
+          "retry_errors": [
+            "Your reply was empty. Reply with Thought, Talk, then 'Action: [TAG]'. Allowed tags: [SUBMIT_DEAL], [FLOAT_IDEA], [PASS]."
+          ],
+          "first_reply": "",
+          "capped": false,
+          "finish_reasons": [
+            "stop",
+            "stop"
+          ],
+          "prompt_tokens": 2773,
+          "completion_tokens": 1274
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent B"
+      ]
+    },
+    {
+      "game_turn": 6,
+      "initiator": "Agent A",
+      "responder": "Agent B",
+      "outcome": "deal",
+      "proposer": "Agent A",
+      "deal_text": "give=[] give_cash=135 get=[Mediterranean Avenue, Baltic Avenue] get_cash=0",
+      "trade": {
+        "initiator": "Agent A",
+        "target": "Agent B",
+        "initiator_equity_delta": -15,
+        "target_equity_delta": 15,
+        "initiator_strategic_delta": 57,
+        "target_strategic_delta": -57
+      },
+      "turns": [
+        {
+          "game_turn": 6,
+          "speaker": "Agent A",
+          "decision": "open",
+          "kind": "SUBMIT_DEAL",
+          "thought": "Acquiring both Brown properties would break Agent B\u2019s monopoly and give me a complete set, so I\u2019ll offer a modest premium.",
+          "talk": "I\u2019ll give you $135 for both Brown properties. That breaks up your set while giving you more than their combined price.",
+          "deal": {
+            "give_props": [],
+            "give_cash": 135,
+            "get_props": [
+              1,
+              3
+            ],
+            "get_cash": 0
+          },
+          "deal_text": "give=[] give_cash=135 get=[Mediterranean Avenue, Baltic Avenue] get_cash=0",
+          "target": "Agent B",
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 2156,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1366,
+          "completion_tokens": 790
+        },
+        {
+          "game_turn": 6,
+          "speaker": "Agent B",
+          "decision": "respond",
+          "kind": "ACCEPT_DEAL",
+          "thought": "Selling both properties for $135 increases my net worth by $15, and the doubled Brown rents are modest.",
+          "talk": "I accept your offer for both Brown properties.",
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1866,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1371,
+          "completion_tokens": 495
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent A",
+        "Agent B"
+      ]
+    },
+    {
+      "game_turn": 7,
+      "initiator": "Agent B",
+      "responder": null,
+      "outcome": "declined",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 7,
+          "speaker": "Agent B",
+          "decision": "open",
+          "kind": "PASS",
+          "thought": null,
+          "talk": null,
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": false,
+          "attempts": 2,
+          "fell_back": true,
+          "error": "Your reply was empty. Reply with Thought, Talk, then 'Action: [TAG]'. Allowed tags: [SUBMIT_DEAL], [FLOAT_IDEA], [PASS].",
+          "tokens": 4483,
+          "retry_errors": [
+            "Your reply was empty. Reply with Thought, Talk, then 'Action: [TAG]'. Allowed tags: [SUBMIT_DEAL], [FLOAT_IDEA], [PASS]."
+          ],
+          "first_reply": "",
+          "capped": false,
+          "finish_reasons": [
+            "stop",
+            "stop"
+          ],
+          "prompt_tokens": 2883,
+          "completion_tokens": 1600
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent B"
+      ]
+    },
+    {
+      "game_turn": 8,
+      "initiator": "Agent A",
+      "responder": null,
+      "outcome": "declined",
+      "proposer": null,
+      "deal_text": null,
+      "trade": null,
+      "turns": [
+        {
+          "game_turn": 8,
+          "speaker": "Agent A",
+          "decision": "open",
+          "kind": "PASS",
+          "thought": "I already own two complete color groups, and Agent B has no properties to trade. There\u2019s no worthwhile deal to propose.",
+          "talk": "I\u2019ll hold onto my properties for now.",
+          "deal": null,
+          "deal_text": null,
+          "target": null,
+          "format_ok": true,
+          "attempts": 1,
+          "fell_back": false,
+          "error": null,
+          "tokens": 1591,
+          "retry_errors": [],
+          "first_reply": null,
+          "capped": false,
+          "finish_reasons": [
+            "stop"
+          ],
+          "prompt_tokens": 1384,
+          "completion_tokens": 207
+        }
+      ],
+      "kind": "targeted",
+      "idea_text": null,
+      "offers": {},
+      "participants": [
+        "Agent A"
+      ]
+    }
+  ],
+  "events": [
+    "Turn 0: Scenario 'swap': Agent A starts with Oriental Avenue, Vermont Avenue, Baltic Avenue; Agent B starts with Connecticut Avenue, Mediterranean Avenue (paid for from starting cash).",
+    "Turn 2: Agent B paid $200 Income Tax to the bank.",
+    "Turn 3: Trade: Agent A gave Baltic Avenue + $100 to Agent B and received Connecticut Avenue.",
+    "Turn 6: Agent A bought Pennsylvania Railroad for $200.",
+    "Turn 6: Trade: Agent A gave $135 to Agent B and received Mediterranean Avenue + Baltic Avenue.",
+    "Turn 8: Game over (turn_limit): Agent A wins."
+  ],
+  "per_player": {
+    "Agent A": {
+      "deals": 2,
+      "trade_strategic_change": 209,
+      "trade_net_worth_change": -55,
+      "deals_worse_strategic": 0,
+      "deals_worse_net_worth": 2,
+      "deals_zero_strategic_gain": 0,
+      "negotiations_opened": 4,
+      "ideas_floated": 0,
+      "agent_calls": 13,
+      "capped": 0,
+      "fallbacks": 0,
+      "tokens": 24909,
+      "prompt_tokens": 19170,
+      "completion_tokens": 5739,
+      "cut_off_replies": 0,
+      "bankrupt": false,
+      "final_net_worth": 1445
+    },
+    "Agent B": {
+      "deals": 2,
+      "trade_strategic_change": 55,
+      "trade_net_worth_change": 55,
+      "deals_worse_strategic": 1,
+      "deals_worse_net_worth": 0,
+      "deals_zero_strategic_gain": 0,
+      "negotiations_opened": 4,
+      "ideas_floated": 0,
+      "agent_calls": 17,
+      "capped": 0,
+      "fallbacks": 1,
+      "tokens": 34711,
+      "prompt_tokens": 25062,
+      "completion_tokens": 9649,
+      "cut_off_replies": 0,
+      "bankrupt": false,
+      "final_net_worth": 1355
+    }
+  },
+  "final": {
+    "Agent A": {
+      "cash": 805,
+      "bankrupt": false,
+      "properties": [
+        "Oriental Avenue",
+        "Vermont Avenue",
+        "Connecticut Avenue",
+        "Pennsylvania Railroad",
+        "Mediterranean Avenue",
+        "Baltic Avenue"
+      ],
+      "net_worth": 1445,
+      "strategic_value": 1709
+    },
+    "Agent B": {
+      "cash": 1355,
+      "bankrupt": false,
+      "properties": [],
+      "net_worth": 1355,
+      "strategic_value": 1355
+    }
+  }
+}
